@@ -17,8 +17,8 @@
  *
  * @author  Wentao Shang <wentaoshang@gmail.com>
  */
-#ifndef BLOCK_H_
-#define BLOCK_H_
+#ifndef NDN_TLV_CONSTANTS_H_
+#define NDN_TLV_CONSTANTS_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,5 +54,5 @@ enum {
 }
 #endif
 
-#endif /* BLOCK_H_ */
+#endif /* NDN_TLV_CONSTANTS_H_ */
 /** @} */

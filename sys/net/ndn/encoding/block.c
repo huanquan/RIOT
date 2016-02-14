@@ -7,7 +7,7 @@
  */
 
 /**
- * @ingroup     net_ndn
+ * @ingroup     net_ndn_encoding
  * @{
  *
  * @file
@@ -27,6 +27,16 @@ static int _ndn_block_get_var_number(const uint8_t* buf, int len)
     uint8_t val = *buf;
     if (val > 0 && val < 253) return val;
     else return -1;  //TODO: support multi-byte var-number.
+}
+
+int ndn_block_put_var_number(unsigned int num, uint8_t* buf, int len)
+{
+    if (buf == NULL || len <= 0) return -1;
+
+    if (num >= 253) return -1;  //TODO: support multi-byte var-number.
+
+    buf[0] = num & 0xFF;
+    return 1;
 }
 
 int ndn_block_get_type(const uint8_t* buf, int len)
@@ -71,14 +81,14 @@ int ndn_block_integer_length(unsigned int num)
 }
 
 
-static int _ndn_block_var_number_length(unsigned int num)
+static int _ndn_block_var_number_length(int num)
 {
-    if (num < 253) return 1;
+    if (num >= 0 && num < 253) return 1;
     else return -1;  //TODO: support multi-byte var-number.
 }
 
 
-int ndn_block_total_length(unsigned int type, unsigned int length)
+int ndn_block_total_length(int type, int length)
 {
     int type_len = _ndn_block_var_number_length(type);
     int length_len = _ndn_block_var_number_length(length);

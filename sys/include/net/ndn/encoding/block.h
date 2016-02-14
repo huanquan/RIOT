@@ -30,6 +30,20 @@ extern "C" {
 #endif
 
 /**
+ * @brief   Writes a non-negative integer into a buffer using
+ *          variable-length encoding.
+ *
+ * @param[in] num       The number to encode.
+ * @param[in] buf       Buffer to write @p num into.
+ * @param[in] len       Size of the TLV block pointed by @p buf.
+ *
+ * @return  The number of bytes written into the buffer.
+ * @return  -1, if there is not enough space to write @p num.
+ * @return  -1, if @p num is invalid or @p buf is NULL.
+ */
+int ndn_block_put_var_number(unsigned int num, uint8_t* buf, int len);
+
+/**
  * @brief   Reads the type field from the TLV block.
  *
  * @param[in] buf       Pointer to the TLV block.
@@ -78,8 +92,9 @@ int ndn_block_integer_length(unsigned int num);
  * @param[in] length    Length value of the TLV block.
  *
  * @return  Total length of the TLV block.
+ * @return  -1, if @p type or @p length is invalid or less than 0.
  */
-int ndn_block_total_length(unsigned int type, unsigned int length);
+int ndn_block_total_length(int type, int length);
 
 #ifdef __cplusplus
 }
