@@ -552,3 +552,11 @@ ifneq (,$(filter random,$(USEMODULE)))
         USEMODULE += tinymt32
     endif
 endif
+
+ifneq (,$(filter ndn_encoding,$(USEMODULE)))
+    USEMODULE += gnrc_pktbuf
+endif
+
+ifneq (,$(filter ndn,$(USEMODULE)))
+    USEMODULE += ndn_encoding
+endif

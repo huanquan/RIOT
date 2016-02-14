@@ -93,6 +93,13 @@ ifneq (,$(filter sema,$(USEMODULE)))
     DIRS += sema
 endif
 
+ifneq (,$(filter ndn,$(USEMODULE)))
+    DIRS += net/ndn
+endif
+ifneq (,$(filter ndn_encoding,$(USEMODULE)))
+    DIRS += net/ndn/encoding
+endif
+
 DIRS += $(dir $(wildcard $(addsuffix /Makefile, ${USEMODULE})))
 
 include $(RIOTBASE)/Makefile.base
