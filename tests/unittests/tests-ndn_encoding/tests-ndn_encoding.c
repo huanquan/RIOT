@@ -524,6 +524,8 @@ static void test_ndn_interest_create__valid(void)
     TEST_ASSERT(0 == memcmp((uint8_t*) pkt->data, result1, sizeof(result1)));
     TEST_ASSERT(0 == memcmp((uint8_t*) pkt->next->data, result2, 2));
     TEST_ASSERT(0 == memcmp((uint8_t*) pkt->next->data + 6, result2 + 6, 4));
+
+    gnrc_pktbuf_release(pkt);
 }
 
 static void set_up(void)
