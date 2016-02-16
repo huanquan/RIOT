@@ -306,6 +306,16 @@ ifneq (,$(filter gnrc_pktdump,$(USEMODULE)))
   USEMODULE += od
 endif
 
+ifneq (,$(filter ndn,$(USEMODULE)))
+    USEMODULE += ndn_encoding
+    USEMODULE += xtimer
+endif
+
+ifneq (,$(filter ndn_encoding,$(USEMODULE)))
+    USEMODULE += gnrc_pktbuf
+    USEMODULE += random
+endif
+
 ifneq (,$(filter newlib_nano,$(USEMODULE)))
   USEMODULE += newlib
 endif
@@ -551,12 +561,4 @@ ifneq (,$(filter random,$(USEMODULE)))
     ifneq (,$(filter prng_tinymt32,$(USEMODULE)))
         USEMODULE += tinymt32
     endif
-endif
-
-ifneq (,$(filter ndn_encoding,$(USEMODULE)))
-    USEMODULE += gnrc_pktbuf
-endif
-
-ifneq (,$(filter ndn,$(USEMODULE)))
-    USEMODULE += ndn_encoding
 endif

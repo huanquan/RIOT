@@ -32,6 +32,7 @@ enum {
     NDN_TLV_NAME_COMPONENT   = 8,
 
     /* Interest-related TLVs */
+    NDN_TLV_SELECTORS        = 9,
     NDN_TLV_NONCE            = 10,
     NDN_TLV_INTERESTLIFETIME = 11,
 

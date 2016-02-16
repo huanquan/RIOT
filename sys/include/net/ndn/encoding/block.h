@@ -77,13 +77,26 @@ int ndn_block_get_length(const uint8_t* buf, int len);
 const uint8_t* ndn_block_get_value(const uint8_t* buf, int len);
 
 /**
- * @brief   Computes the length of the encoded non-negative integer.
+ * @brief   Computes the length of the encoded non-negative 32-bit integer.
  *
  * @param[in] num       Non-negative integer to be encoded.
  *
  * @return  Length of the encoded non-negative integer.
  */
-int ndn_block_integer_length(unsigned int num);
+int ndn_block_integer_length(uint32_t num);
+
+/**
+ * @brief   Writes an non-negative integer into a caller-supplied buffer
+ *          using NDN non-negative integer encoding format.
+ *
+ * @param[in] num       Non-negative integer to be encoded.
+ * @param[in] buf       Buffer to write into.
+ * @param[in] len       Size of the buffer
+ *
+ * @return  Number of bytes written, if success.
+ * @return  -1, if @p buf is NULL or not big enough to hold the encoded integer.
+ */
+int ndn_block_put_integer(uint32_t num, uint8_t* buf, int len);
 
 /**
  * @brief   Computes the total length of the TLV block.
