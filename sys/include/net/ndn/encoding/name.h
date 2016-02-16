@@ -59,7 +59,7 @@ int ndn_name_component_compare(ndn_name_component_t* lhs, ndn_name_component_t* 
  *          following the TLV wire format.
  *
  * @param[in]  comp      Name component to be encoded.
- * @param[in]  buf       Pointer to the caller-supplied memory buffer.
+ * @param[out] buf       Pointer to the caller-supplied memory buffer.
  * @param[in]  len       Size of the buffer.
  *
  * @return  Number of bytes written to the buffer, if success.
@@ -102,7 +102,7 @@ int ndn_name_compare(ndn_name_t* lhs, ndn_name_t* rhs);
  * @param[in]  pos       Position of the component (zero-indexed). If negative, @p pos
  *                       represents the offset from the end of the name (i.e., -1 means 
  *                       last component).
- * @param[in]  comp      Caller-supplied structure for storing the retrieved component.
+ * @param[out] comp      Caller-supplied structure for storing the retrieved component.
  *                       This structure is invalidated once @p name is released. If
  *                       @p comp.buf is not NULL, the old memory is released first.
  *
@@ -129,7 +129,7 @@ int ndn_name_total_length(ndn_name_t* name);
  *          Does nothing if the name is empty.
  *
  * @param[in]  name      Name to be encoded.
- * @param[in]  buf       Pointer to the caller-supplied memory buffer.
+ * @param[out] buf       Pointer to the caller-supplied memory buffer.
  * @param[in]  len       Size of the buffer.
  *
  * @return  Number of bytes written to the buffer, if success.

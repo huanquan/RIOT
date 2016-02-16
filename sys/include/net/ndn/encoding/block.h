@@ -33,9 +33,9 @@ extern "C" {
  * @brief   Writes a non-negative integer into a buffer using
  *          variable-length encoding.
  *
- * @param[in] num       The number to encode.
- * @param[in] buf       Buffer to write @p num into.
- * @param[in] len       Size of the TLV block pointed by @p buf.
+ * @param[in]  num       The number to encode.
+ * @param[out] buf       Buffer to write @p num into.
+ * @param[in]  len       Size of the TLV block pointed by @p buf.
  *
  * @return  The number of bytes written into the buffer.
  * @return  -1, if there is not enough space to write @p num.
@@ -89,9 +89,9 @@ int ndn_block_integer_length(uint32_t num);
  * @brief   Writes an non-negative integer into a caller-supplied buffer
  *          using NDN non-negative integer encoding format.
  *
- * @param[in] num       Non-negative integer to be encoded.
- * @param[in] buf       Buffer to write into.
- * @param[in] len       Size of the buffer
+ * @param[in]  num       Non-negative integer to be encoded.
+ * @param[out] buf       Buffer to write into.
+ * @param[in]  len       Size of the buffer
  *
  * @return  Number of bytes written, if success.
  * @return  -1, if @p buf is NULL or not big enough to hold the encoded integer.

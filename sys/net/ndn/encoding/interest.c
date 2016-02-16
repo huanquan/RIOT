@@ -40,7 +40,7 @@ gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, unsigned 
     if (name_len + nonce_lt_len > 253)
 	return NULL;  //TODO: support multi-byte length field.
 
-    gnrc_pktsnip_t *head_snip = NULL, *nonce_lt_snip = NULL, *tmp = NULL;
+    gnrc_pktsnip_t *head_snip = NULL, *nonce_lt_snip = NULL;
     uint8_t* buf = NULL;
 
     // Create nonce+lifetime snip.
@@ -49,14 +49,6 @@ gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, unsigned 
 	DEBUG("ndn_encoding: cannot create nonce+lifetime snip: unable to allocate packet\n");
         return NULL;
     }
-
-    tmp = gnrc_pktbuf_start_write(nonce_lt_snip);
-    if (tmp == NULL) {
-        DEBUG("ndn_encoding: cannot write nonce+lifetime snip: unable to allocate packet\n");
-        gnrc_pktbuf_release(nonce_lt_snip);
-        return NULL;
-    }
-    nonce_lt_snip = tmp;
     buf = (uint8_t*) (nonce_lt_snip->data);
     
     // Fill in the nonce.
@@ -79,14 +71,6 @@ gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, unsigned 
 	gnrc_pktbuf_release(nonce_lt_snip);
         return NULL;
     }
-
-    tmp = gnrc_pktbuf_start_write(head_snip);
-    if (tmp == NULL) {
-        DEBUG("ndn_encoding: cannot write header+name snip: unable to allocate packet\n");
-        gnrc_pktbuf_release(head_snip);
-        return NULL;
-    }
-    head_snip = tmp;
     buf = (uint8_t*) (head_snip->data);
 
     // Fill in the Interest header and name field.
