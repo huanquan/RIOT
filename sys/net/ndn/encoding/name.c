@@ -105,13 +105,21 @@ static int _ndn_name_length(ndn_name_t* name)
     return res;
 }
 
+int ndn_name_total_length(ndn_name_t* name)
+{
+    int cl = _ndn_name_length(name);
+    if (cl <= 0) return cl;
+    int tl = ndn_block_total_length(NDN_TLV_NAME, cl);
+    return tl;
+}
+
 int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len)
 {
     if (name == NULL || buf == NULL) return -1;
 
     int cl = _ndn_name_length(name);
     if (cl <= 0) return cl;
-    int tl = ndn_block_total_length(NDN_TLV_NAME, _ndn_name_length(name));
+    int tl = ndn_block_total_length(NDN_TLV_NAME, cl);
     if (tl > len) return -1;
 
     int bytes_written = ndn_block_put_var_number(NDN_TLV_NAME, buf, len);

@@ -113,6 +113,18 @@ int ndn_name_compare(ndn_name_t* lhs, ndn_name_t* rhs);
 int ndn_name_get_component(ndn_name_t* name, int pos, ndn_name_component_t* comp);
 
 /**
+ * @brief   Computes the total length of the TLV encoding of a name.
+ *
+ * @param[in]  name      Name to be encoded.
+ *
+ * @return  Total length of the TLV encoding, if success.
+ * @return  0, if @p name is empty.
+ * @return  -1, if @p name is NULL.
+ * @return  -1, if any of the components is empty or invalid.
+ */
+int ndn_name_total_length(ndn_name_t* name);
+
+/**
  * @brief   Encodes a name into caller-supplied buffer following the TLV wire format.
  *          Does nothing if the name is empty.
  *

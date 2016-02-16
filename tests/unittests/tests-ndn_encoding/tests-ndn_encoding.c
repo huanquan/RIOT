@@ -20,6 +20,8 @@
 #include "net/ndn/ndn-constants.h"
 #include "net/ndn/encoding/block.h"
 #include "net/ndn/encoding/name.h"
+#include "net/ndn/encoding/interest.h"
+#include "random.h"
 
 #include "unittests-constants.h"
 #include "tests-ndn_encoding.h"
@@ -130,16 +132,37 @@ static void test_ndn_block_get_value__type_255__length_2(void)
 }
 
 
-static void test_ndn_block_integer_length__num_1(void)
+static void test_ndn_block_integer_length__all(void)
 {
     TEST_ASSERT_EQUAL_INT(1, ndn_block_integer_length(1));
+    TEST_ASSERT_EQUAL_INT(2, ndn_block_integer_length(0x100));
+    TEST_ASSERT_EQUAL_INT(4, ndn_block_integer_length(0x10000));
 }
 
-static void test_ndn_block_integer_length__num_256(void)
+static void test_ndn_block_put_integer__invalid(void)
 {
-    TEST_ASSERT_EQUAL_INT(-1, ndn_block_integer_length(0x100));
+    uint8_t buf[4] = {0, 0, 0, 0};
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_put_integer(1, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_put_integer(1, buf, -1));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_put_integer(0x11, buf, 0));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_put_integer(0x1111, buf, 1));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_put_integer(0x111111, buf, 2));
 }
 
+static void test_ndn_block_put_integer__valid(void)
+{
+    uint8_t buf[4] = {0, 0, 0, 0};
+    TEST_ASSERT_EQUAL_INT(1, ndn_block_put_integer(1, buf, sizeof(buf)));
+    TEST_ASSERT_EQUAL_INT(1, buf[0]);
+    TEST_ASSERT_EQUAL_INT(2, ndn_block_put_integer(0x7890, buf, sizeof(buf)));
+    TEST_ASSERT_EQUAL_INT(0x78, buf[0]);
+    TEST_ASSERT_EQUAL_INT(0x90, buf[1]);
+    TEST_ASSERT_EQUAL_INT(4, ndn_block_put_integer(0x789015, buf, sizeof(buf)));
+    TEST_ASSERT_EQUAL_INT(0, buf[0]);
+    TEST_ASSERT_EQUAL_INT(0x78, buf[1]);
+    TEST_ASSERT_EQUAL_INT(0x90, buf[2]);
+    TEST_ASSERT_EQUAL_INT(0x15, buf[3]);
+}
 
 static void test_ndn_block_total_length__type_1__length_2(void)
 {
@@ -174,10 +197,11 @@ Test *tests_ndn_encoding_block_tests(void)
         new_TestFixture(test_ndn_block_get_value__type_1__length_2),
         new_TestFixture(test_ndn_block_get_value__type_1__length_255),
         new_TestFixture(test_ndn_block_get_value__type_255__length_2),
-        new_TestFixture(test_ndn_block_integer_length__num_1),
-        new_TestFixture(test_ndn_block_integer_length__num_256),
+        new_TestFixture(test_ndn_block_integer_length__all),
         new_TestFixture(test_ndn_block_total_length__type_1__length_2),
         new_TestFixture(test_ndn_block_total_length__invalid),
+        new_TestFixture(test_ndn_block_put_integer__invalid),
+        new_TestFixture(test_ndn_block_put_integer__valid),
     };
 
     EMB_UNIT_TESTCALLER(ndn_encoding_block_tests, NULL, NULL, fixtures);
@@ -340,6 +364,39 @@ static void test_ndn_name_get_component__valid(void)
     TEST_ASSERT_EQUAL_INT(1, dst.len);
 }
 
+static void test_ndn_name_total_length__invalid(void)
+{
+    uint8_t buf[8] = "abcd";
+    ndn_name_component_t comps[4] = {
+	{ buf, 4 },
+	{ buf, -1 },
+	{ NULL, 1 },
+	{ buf, 0 },
+    };
+    ndn_name_t bad1 = { 1, comps + 1 };
+    ndn_name_t bad2 = { 1, comps + 2 };
+    ndn_name_t bad3 = { 1, comps + 3 };
+
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_total_length(NULL));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_total_length(&bad1));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_total_length(&bad2));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_total_length(&bad3));
+}
+
+static void test_ndn_name_total_length__valid(void)
+{
+    uint8_t buf[6] = "abcdef";
+    ndn_name_component_t comps1[4] = {
+	{ buf, 1 },
+	{ buf + 1, 1 },
+	{ buf + 2, 2 },
+	{ buf + 4, 2 }
+    };
+    ndn_name_t name1 = { 4, comps1 };  // URI = /a/b/cd/ef
+
+    TEST_ASSERT_EQUAL_INT(16, ndn_name_total_length(&name1));
+}
+
 static void test_ndn_name_wire_encode__invalid(void)
 {
     uint8_t buf[8] = "abcd";
@@ -397,6 +454,8 @@ Test *tests_ndn_encoding_name_tests(void)
 	new_TestFixture(test_ndn_name_compare__valid),
         new_TestFixture(test_ndn_name_get_component__invalid),
 	new_TestFixture(test_ndn_name_get_component__valid),
+        new_TestFixture(test_ndn_name_total_length__invalid),
+	new_TestFixture(test_ndn_name_total_length__valid),
         new_TestFixture(test_ndn_name_wire_encode__invalid),
 	new_TestFixture(test_ndn_name_wire_encode__valid),
     };
@@ -407,9 +466,88 @@ Test *tests_ndn_encoding_name_tests(void)
 }
 
 
+/* tests for interest.h */
+
+static void test_ndn_interest_create__invalid(void)
+{
+    uint8_t buf[4] = "abcd";
+    ndn_name_component_t comps[4] = {
+	{ buf, 4 },
+	{ buf, -1 },
+	{ NULL, 1 },
+	{ buf, 0 },
+    };
+    ndn_name_t bad1 = { 1, comps + 1 };
+    ndn_name_t bad2 = { 1, comps + 2 };
+    ndn_name_t bad3 = { 1, comps + 3 };
+
+    TEST_ASSERT_NULL(ndn_interest_create(NULL, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create(&bad1, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create(&bad2, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create(&bad3, NULL, 4000));
+}
+
+static void test_ndn_interest_create__valid(void)
+{
+    uint8_t buf[6] = "abcdef";
+    ndn_name_component_t comps[4] = {
+	{ buf, 1 },
+	{ buf + 1, 1 },
+	{ buf + 2, 2 },
+	{ buf + 4, 2 }
+    };
+    ndn_name_t name = { 4, comps };  // URI = /a/b/cd/ef
+    uint32_t lifetime = 0x4000;
+
+    uint8_t result1[18] = {
+	NDN_TLV_INTEREST, 26,
+	NDN_TLV_NAME, 14,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
+    };
+
+    uint8_t result2[10] = {
+    	NDN_TLV_NONCE, 4,
+    	0, 0, 0, 0, /* random values that we don't care */
+    	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
+    };
+
+    gnrc_pktsnip_t* pkt = ndn_interest_create(&name, NULL, lifetime);
+    TEST_ASSERT_NOT_NULL(pkt);
+    TEST_ASSERT_EQUAL_INT(sizeof(result1), pkt->size);
+    TEST_ASSERT_NOT_NULL(pkt->next);
+    TEST_ASSERT_EQUAL_INT(10, pkt->next->size);
+    TEST_ASSERT_NULL(pkt->next->next);
+
+    TEST_ASSERT(0 == memcmp((uint8_t*) pkt->data, result1, sizeof(result1)));
+    TEST_ASSERT(0 == memcmp((uint8_t*) pkt->next->data, result2, 2));
+    TEST_ASSERT(0 == memcmp((uint8_t*) pkt->next->data + 6, result2 + 6, 4));
+}
+
+static void set_up(void)
+{
+    gnrc_pktbuf_init();
+    genrand_init(0);
+}
+
+Test *tests_ndn_encoding_interest_tests(void)
+{
+    EMB_UNIT_TESTFIXTURES(fixtures) {
+        new_TestFixture(test_ndn_interest_create__invalid),
+	new_TestFixture(test_ndn_interest_create__valid),
+    };
+
+    EMB_UNIT_TESTCALLER(ndn_encoding_interest_tests, set_up, NULL, fixtures);
+
+    return (Test *)&ndn_encoding_interest_tests;
+}
+
 void tests_ndn_encoding(void)
 {
     TESTS_RUN(tests_ndn_encoding_block_tests());
     TESTS_RUN(tests_ndn_encoding_name_tests());
+    TESTS_RUN(tests_ndn_encoding_interest_tests());
 }
 /** @} */

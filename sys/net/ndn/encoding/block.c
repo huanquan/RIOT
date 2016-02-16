@@ -74,12 +74,34 @@ const uint8_t* ndn_block_get_value(const uint8_t* buf, int len)
 }
 
 
-int ndn_block_integer_length(unsigned int num)
+int ndn_block_integer_length(uint32_t num)
 {
     if (num <= 0xFF) return 1;
-    else return -1;  //TODO: support multi-byte var-number.
+    else if (num <= 0xFFFF) return 2;
+    else return 4;
 }
 
+int ndn_block_put_integer(uint32_t num, uint8_t* buf, int len)
+{
+    if (buf == NULL || len <= 0) return -1;
+
+    if (num <= 0xFF) {
+	buf[0] = num & 0xFF;
+	return 1;
+    } else if (num <= 0xFFFF && len >= 2) {
+	buf[0] = (num >> 8) & 0xFF;
+	buf[1] = num & 0xFF;
+	return 2;
+    } else if (len >= 4) {
+	buf[0] = (num >> 24) & 0xFF;
+	buf[1] = (num >> 16) & 0xFF;
+	buf[2] = (num >> 8) & 0xFF;
+	buf[3] = num & 0xFF;
+	return 4;	
+    }
+
+    return -1;
+}
 
 static int _ndn_block_var_number_length(int num)
 {

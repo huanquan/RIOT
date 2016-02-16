@@ -93,6 +93,10 @@ typedef enum {
                                      chunk */
 #endif
 
+#ifdef MODULE_NDN_ENCODING
+    GNRC_NETTYPE_NDN,           /**< Protocol is NDN */
+#endif
+
     /**
      * @{
      * @name Testing
@@ -129,6 +133,10 @@ static inline gnrc_nettype_t gnrc_nettype_from_ethertype(uint16_t type)
         case ETHERTYPE_NDN:
             return GNRC_NETTYPE_CCN;
 #endif
+#ifdef MODULE_NDN
+        case ETHERTYPE_NDN2:
+            return GNRC_NETTYPE_NDN;
+#endif
         default:
             return GNRC_NETTYPE_UNDEF;
     }
@@ -155,6 +163,10 @@ static inline uint16_t gnrc_nettype_to_ethertype(gnrc_nettype_t type)
 #ifdef MODULE_CCN_LITE
         case GNRC_NETTYPE_CCN:
             return ETHERTYPE_NDN;
+#endif
+#ifdef MODULE_NDN
+        case GNRC_NETTYPE_NDN:
+            return ETHERTYPE_NDN2;
 #endif
         default:
             return ETHERTYPE_UNKNOWN;
