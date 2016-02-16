@@ -76,6 +76,10 @@
 #include "net/gnrc/udp.h"
 #endif
 
+#ifdef MODULE_NDN
+#include "net/ndn/ndn.h"
+#endif
+
 #ifdef MODULE_LWIP
 #include "lwip.h"
 #endif
@@ -216,6 +220,12 @@ void auto_init(void)
 #ifdef MODULE_GNRC_UHCPC
     extern void auto_init_gnrc_uhcpc(void);
     auto_init_gnrc_uhcpc();
+#endif
+
+/* initialize NDN module after the network devices are initilized */
+#ifdef MODULE_NDN
+    DEBUG("Auto init NDN module.\n");
+    ndn_init();
 #endif
 
 /* initialize sensors and actuators */
