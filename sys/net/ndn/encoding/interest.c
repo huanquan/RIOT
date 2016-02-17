@@ -30,7 +30,7 @@ gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, unsigned 
 {
     if (name == NULL) return NULL;
 
-    if (selectors != NULL) return NULL;  //TODO: support selectors.
+    (void)selectors;  //TODO: support selectors.
 
     int name_len = ndn_name_total_length(name);
     if (name_len <= 0) return NULL;
