@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "net/gnrc/nettype.h"
 #include "net/ndn/ndn-constants.h"
 #include "net/ndn/encoding/block.h"
 #include "net/ndn/encoding/name.h"
@@ -45,10 +46,10 @@ int ndn_name_component_compare(ndn_name_component_t* lhs, ndn_name_component_t* 
 int ndn_name_component_wire_encode(ndn_name_component_t* comp, uint8_t* buf, int len)
 {
     if (comp == NULL || buf == NULL) return -1;
-    if (comp->buf == NULL) return -1;
+    if (comp->buf == NULL || comp->len <= 0) return -1;
 
     int tl = ndn_block_total_length(NDN_TLV_NAME_COMPONENT, comp->len);
-    if (tl < 0 || tl > len) return -1;
+    if (tl > len) return -1;
 
     int bytes_written = ndn_block_put_var_number(NDN_TLV_NAME_COMPONENT, buf, len);
     bytes_written += ndn_block_put_var_number(comp->len, buf + bytes_written, len - bytes_written);
@@ -98,9 +99,7 @@ static int _ndn_name_length(ndn_name_t* name)
     {
 	ndn_name_component_t* comp = &name->comps[i];
 	if (comp->buf == NULL || comp->len <= 0) return -1;
-	int l = ndn_block_total_length(NDN_TLV_NAME_COMPONENT, comp->len);
-	if (l == -1) return -1;
-	else res += l;
+	res += ndn_block_total_length(NDN_TLV_NAME_COMPONENT, comp->len);
     }
     return res;
 }
@@ -130,6 +129,71 @@ int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len)
 							len - bytes_written);
     }
     return tl;
+}
+
+int ndn_packet_get_name_size(gnrc_pktsnip_t* pkt)
+{
+    if (pkt == NULL || pkt->type != GNRC_NETTYPE_NDN) return -1;
+
+    uint8_t* buf = (uint8_t*)pkt->data;
+    int len = pkt->size;
+    uint32_t num;
+    int l;
+
+    /* read packet type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_INTEREST && num != NDN_TLV_DATA) return -1;
+    buf += l;
+    len -= l;
+
+    /* skip packet length field */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_NAME) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name length */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += l;
+    len -= l;
+
+    if ((int)num > len)  // entire name must reside in a continuous memory block
+	return -1;
+
+    int res = 0;
+    len = (int)num;
+
+    while (len > 0) {
+	/* read name component type */
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return -1;
+
+	if (num != NDN_TLV_NAME_COMPONENT) return -1;
+	buf += l;
+	len -= l;
+
+	++res;
+
+	/* read name component length and skip value */
+	num = 0;
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return -1;
+	buf += (l + num);
+	len -= (l + num);
+    }
+
+    assert(len == 0);
+
+    return res;
 }
 
 /** @} */
