@@ -23,6 +23,7 @@
 #include <inttypes.h>
 #include <sys/types.h>
 
+#include "net/gnrc/pktbuf.h"
 #include "net/ndn/ndn-constants.h"
 
 #ifdef __cplusplus
@@ -140,15 +141,16 @@ int ndn_name_total_length(ndn_name_t* name);
 int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len);
 
 /**
- * @brief   Releases the memory that contains the array of name components.
- *          Does not release the memory for holding the content of the components.
+ * @brief   Gets the number of name components in an Interest or Data packet.
  *
- * @param[in]  name   Name to be released. This function does nothing
- *                    if @p name is NULL.
+ * @param[in]  pkt    Packet buffer containing a TLV-encoded NDN packet.
  *
+ * @return  Number of name components in the packet.
+ * @return  -1, if @p pkt is NULL.
+ * @return  -1, if @p pkt is not an NDN packet.
+ * @return  -1, if @p pkt does not contain a complete name.
  */
-void ndn_name_release(ndn_name_t* name);
-
+int ndn_packet_get_name_size(gnrc_pktsnip_t* pkt);
 
 
 #ifdef __cplusplus
