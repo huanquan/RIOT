@@ -21,7 +21,7 @@
 
 #include "net/ndn/ndn.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG (1)
 #include "debug.h"
 
 #if ENABLE_DEBUG
@@ -100,7 +100,24 @@ static void *_event_loop(void *args)
 
 static void _receive(gnrc_pktsnip_t *pkt)
 {
-    (void)pkt;
+    if (pkt == NULL) return;
+
+    /* remove L2 information */
+    gnrc_pktsnip_t* netif = gnrc_pktsnip_search_type(pkt, GNRC_NETTYPE_NETIF);
+    if (netif != NULL)
+	gnrc_pktbuf_remove_snip(pkt, netif);
+
+    if (pkt->type != GNRC_NETTYPE_NDN)
+	DEBUG("ndn: incorrect packet type\n");
+
+    DEBUG("ndn: received NDN packet\n");
+    /* send payload to receivers */
+    if (!gnrc_netapi_dispatch_receive(GNRC_NETTYPE_NDNAPP,
+				      GNRC_NETREG_DEMUX_CTX_ALL, pkt)) {
+        DEBUG("ndn: unable to forward packet as no one is interested in it\n");
+        gnrc_pktbuf_release(pkt);
+    }
+
     return;
 }
 
