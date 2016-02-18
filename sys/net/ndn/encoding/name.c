@@ -64,18 +64,16 @@ int ndn_name_compare(ndn_name_t* lhs, ndn_name_t* rhs)
     if (lhs->comps == NULL && lhs->size != 0) return -2;
     if (rhs->comps == NULL && rhs->size != 0) return -2;
 
+    for (int i = 0; i < lhs->size && i < rhs->size; ++i)
+    {
+	int res = ndn_name_component_compare(&lhs->comps[i], &rhs->comps[i]);
+	if (res == 0) continue;
+	else return res;
+    }
+
     if (lhs->size < rhs->size) return -1;
     else if (lhs->size > rhs->size) return 1;
-    else
-    {
-	for (int i = 0; i < lhs->size; ++i)
-	{
-	    int res = ndn_name_component_compare(&lhs->comps[i], &rhs->comps[i]);
-	    if (res == 0) continue;
-	    else return res;
-	}
-	return 0;
-    }
+    else return 0;
 }
 
 int ndn_name_get_component(ndn_name_t* name, int pos, ndn_name_component_t* comp)
@@ -194,6 +192,82 @@ int ndn_packet_get_name_size(gnrc_pktsnip_t* pkt)
     assert(len == 0);
 
     return res;
+}
+
+int ndn_packet_get_name_component(gnrc_pktsnip_t* pkt, int pos, ndn_name_component_t* comp)
+{
+    if (comp == NULL || pos < 0) return -1;
+
+    if (pkt == NULL || pkt->type != GNRC_NETTYPE_NDN) return -1;
+
+    uint8_t* buf = (uint8_t*)pkt->data;
+    int len = pkt->size;
+    uint32_t num;
+    int l;
+
+    /* read packet type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_INTEREST && num != NDN_TLV_DATA) return -1;
+    buf += l;
+    len -= l;
+
+    /* skip packet length field */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_NAME) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name length */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += l;
+    len -= l;
+
+    if ((int)num > len)  // entire name must reside in a continuous memory block
+	return -1;
+
+    int cnt = 0;
+    len = (int)num;
+
+    while (len > 0) {
+	/* read name component type */
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return -1;
+
+	if (num != NDN_TLV_NAME_COMPONENT) return -1;
+	buf += l;
+	len -= l;
+
+	/* read name component length and skip value */
+	num = 0;
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return -1;
+	buf += l;
+	len -= l;
+
+	if (cnt == pos) {
+	    /* found the component we're looking for */
+	    comp->buf = buf;
+	    comp->len = num;
+	    return 0;
+	}
+
+	buf += num;
+	len -= num;
+	++cnt;
+    }
+
+    assert(len == 0);
+
+    return -1;
 }
 
 /** @} */

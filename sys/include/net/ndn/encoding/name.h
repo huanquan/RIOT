@@ -105,7 +105,7 @@ int ndn_name_compare(ndn_name_t* lhs, ndn_name_t* rhs);
  *                       last component).
  * @param[out] comp      Caller-supplied structure for storing the retrieved component.
  *                       This structure is invalidated once @p name is released. If
- *                       @p comp.buf is not NULL, the old memory is released first.
+ *                       @p comp->buf is not NULL, the old memory pointer will be lost.
  *
  * @return  0 if success.
  * @return  -1 if @p pos >= @p name.size or @p pos < @p -(name.size).
@@ -152,6 +152,25 @@ int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len);
  */
 int ndn_packet_get_name_size(gnrc_pktsnip_t* pkt);
 
+
+/**
+ * @brief   Gets the n-th name component from an Interest or Data packet.
+ *
+ * @param[in]  pkt    Packet buffer containing a TLV-encoded NDN packet.
+ * @param[in]  pos    Position of the name component to be retrieved (zero-indexed).
+ *                    Cannot be negative.
+ * @param[out] comp   Place to hold the name component structure.
+ *                    This structure is invalidated once @p pkt is released. If
+ *                    @p comp->buf is not NULL, the old memory pointer will be lost.
+ *
+ *
+ * @return  0, if success.
+ * @return  -1, if @p pkt or @p comp is NULL.
+ * @return  -1, if @p pkt is not an NDN packet.
+ * @return  -1, if @p pkt does not contain a complete name.
+ * @return  -1, if @p pos >= the total number of name components.
+ */
+int ndn_packet_get_name_component(gnrc_pktsnip_t* pkt, int pos, ndn_name_component_t* comp);
 
 #ifdef __cplusplus
 }
