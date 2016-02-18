@@ -34,7 +34,7 @@ extern "C" {
  *
  * @param[in]  buf       Buffer to read from.
  * @param[in]  len       Size of the TLV block pointed by @p buf.
- * @param[out] num       The place to store the result.
+ * @param[out] num       Place to store the result.
  *
  * @return  The number of bytes occupied by the encoded number.
  * @return  -1, if the encoded number is incomplete.
@@ -47,7 +47,7 @@ int ndn_block_get_var_number(const uint8_t* buf, int len, uint32_t* num);
  * @brief   Writes a non-negative integer into a buffer using
  *          variable-length encoding.
  *
- * @param[in]  num       The number to encode.
+ * @param[in]  num       Number to encode.
  * @param[out] buf       Buffer to write @p num into.
  * @param[in]  len       Size of the TLV block pointed by @p buf.
  *

@@ -252,12 +252,25 @@ static void test_ndn_name_compare__valid(void)
     };
     ndn_name_t name3 = { 3, comps3 };  // URI = /a/b/c
     ndn_name_t name4 = { 4, comps1 };  // URI = /a/b/c/d
+    ndn_name_component_t comps4[3] = {
+	{ buf, 1 },
+	{ buf + 1, 1 },
+	{ buf + 3, 1 },
+    };
+    ndn_name_t name5 = { 3, comps4 };  // URI = /a/b/d
 
+    // name3 < name1 = name4 < name2 < name5
+    
     TEST_ASSERT_EQUAL_INT(0, ndn_name_compare(&name1, &name4));
+
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_compare(&name1, &name2));
     TEST_ASSERT_EQUAL_INT(1, ndn_name_compare(&name2, &name1));
+
     TEST_ASSERT_EQUAL_INT(1, ndn_name_compare(&name4, &name3));
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_compare(&name3, &name4));
+
+    TEST_ASSERT_EQUAL_INT(1, ndn_name_compare(&name5, &name2));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_compare(&name2, &name5));
 }
 
 static void test_ndn_name_get_component__invalid(void)
@@ -389,21 +402,21 @@ static void test_ndn_packet_get_name_size__invalid(void)
 {
     uint8_t buf1[] = {NDN_TLV_SELECTORS, 2, 3, 4};
     gnrc_pktsnip_t* pkt1 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1), GNRC_NETTYPE_NDN);
-//    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(NULL));
-//    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(pkt1));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(NULL));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(pkt1));
     gnrc_pktbuf_release(pkt1);
 
     uint8_t buf2[] = {NDN_TLV_INTEREST, 200, NDN_TLV_NAME, 10};
     gnrc_pktsnip_t* pkt2 = gnrc_pktbuf_add(NULL, buf2, sizeof(buf2), GNRC_NETTYPE_UNDEF);
     gnrc_pktsnip_t* pkt3 = gnrc_pktbuf_add(NULL, buf2, sizeof(buf2), GNRC_NETTYPE_NDN);
-//    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(pkt2));
-//    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(pkt3));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(pkt2));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(pkt3));
     gnrc_pktbuf_release(pkt2);
     gnrc_pktbuf_release(pkt3);
 
     uint8_t buf3[] = {NDN_TLV_INTEREST, 200, NDN_TLV_NAME, 3, NDN_TLV_SELECTORS, 1, 'a'};
     gnrc_pktsnip_t* pkt4 = gnrc_pktbuf_add(NULL, buf3, sizeof(buf3), GNRC_NETTYPE_NDN);
-//    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(pkt4));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_size(pkt4));
     gnrc_pktbuf_release(pkt4);
 }
 
@@ -423,6 +436,50 @@ static void test_ndn_packet_get_name_size__valid(void)
     gnrc_pktbuf_release(pkt);
 }
 
+static void test_ndn_packet_get_name_component__all(void)
+{
+    uint8_t buf[] = {
+	NDN_TLV_INTEREST, 200,
+	NDN_TLV_NAME, 18,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 3, 'e', 'f', 'g',
+	NDN_TLV_NAME_COMPONENT, 1, 'h',
+    };
+    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf), GNRC_NETTYPE_NDN);
+
+    ndn_name_component_t comp;
+
+    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_component(pkt, -1, &comp));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_component(NULL, 0, &comp));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_component(pkt, 0, NULL));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_packet_get_name_component(pkt, 100, &comp));
+
+    TEST_ASSERT_EQUAL_INT(0, ndn_packet_get_name_component(pkt, 0, &comp));
+    TEST_ASSERT_EQUAL_INT(1, comp.len);
+    TEST_ASSERT_EQUAL_INT('a', comp.buf[0]);
+
+    TEST_ASSERT_EQUAL_INT(0, ndn_packet_get_name_component(pkt, 1, &comp));
+    TEST_ASSERT_EQUAL_INT(1, comp.len);
+    TEST_ASSERT_EQUAL_INT('b', comp.buf[0]);
+
+    TEST_ASSERT_EQUAL_INT(0, ndn_packet_get_name_component(pkt, 2, &comp));
+    TEST_ASSERT_EQUAL_INT(2, comp.len);
+    TEST_ASSERT_EQUAL_INT('c', comp.buf[0]);
+    TEST_ASSERT_EQUAL_INT('d', comp.buf[1]);
+
+    TEST_ASSERT_EQUAL_INT(0, ndn_packet_get_name_component(pkt, 3, &comp));
+    TEST_ASSERT_EQUAL_INT(3, comp.len);
+    TEST_ASSERT_EQUAL_INT('e', comp.buf[0]);
+    TEST_ASSERT_EQUAL_INT('f', comp.buf[1]);
+    TEST_ASSERT_EQUAL_INT('g', comp.buf[2]);
+
+    TEST_ASSERT_EQUAL_INT(0, ndn_packet_get_name_component(pkt, 4, &comp));
+    TEST_ASSERT_EQUAL_INT(1, comp.len);
+    TEST_ASSERT_EQUAL_INT('h', comp.buf[0]);
+}
+
 Test *tests_ndn_encoding_name_tests(void)
 {
     EMB_UNIT_TESTFIXTURES(fixtures) {
@@ -440,6 +497,7 @@ Test *tests_ndn_encoding_name_tests(void)
 	new_TestFixture(test_ndn_name_wire_encode__valid),
         new_TestFixture(test_ndn_packet_get_name_size__invalid),
 	new_TestFixture(test_ndn_packet_get_name_size__valid),
+        new_TestFixture(test_ndn_packet_get_name_component__all),
     };
 
     EMB_UNIT_TESTCALLER(ndn_encoding_name_tests, set_up, NULL, fixtures);
