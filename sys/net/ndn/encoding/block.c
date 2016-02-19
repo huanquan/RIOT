@@ -105,5 +105,20 @@ int ndn_block_put_integer(uint32_t num, uint8_t* buf, int len)
     return -1;
 }
 
+int ndn_block_get_integer(const uint8_t* buf, int len, uint32_t* num)
+{
+    if (buf == NULL || len <= 0) return -1;
+
+    if (len == 1) {
+	*num = buf[0];
+	return 1;
+    } else if (len == 2) {
+	*num = (buf[0] << 8) + buf[1];
+	return 2;
+    } else if (len == 4) {
+	*num = (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3];
+	return 4;
+    } else return -1;
+}
 
 /** @} */

@@ -594,6 +594,46 @@ static void test_ndn_interest_get_name__valid(void)
     TEST_ASSERT_EQUAL_INT(16, name.len);
 }
 
+static void test_ndn_interest_get_nonce__valid(void)
+{
+    uint32_t nonce;
+
+    uint8_t buf[] = {
+	NDN_TLV_INTEREST, 26,
+	NDN_TLV_NAME, 14,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
+    	NDN_TLV_NONCE, 4,
+	0x76, 0x54, 0x32, 0x10,
+    	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
+    };
+    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf), GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_nonce(pkt, &nonce));
+    TEST_ASSERT_EQUAL_INT(0x76543210, nonce);
+}
+
+static void test_ndn_interest_get_lifetime__valid(void)
+{
+    uint32_t lifetime;
+
+    uint8_t buf[] = {
+	NDN_TLV_INTEREST, 26,
+	NDN_TLV_NAME, 14,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
+    	NDN_TLV_NONCE, 4,
+	0x76, 0x54, 0x32, 0x10,
+    	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
+    };
+    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf), GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_lifetime(pkt, &lifetime));
+    TEST_ASSERT_EQUAL_INT(0x4000, lifetime);
+}
+
 Test *tests_ndn_encoding_interest_tests(void)
 {
     EMB_UNIT_TESTFIXTURES(fixtures) {
@@ -601,6 +641,8 @@ Test *tests_ndn_encoding_interest_tests(void)
 	new_TestFixture(test_ndn_interest_create__valid),
 	new_TestFixture(test_ndn_interest_get_name__invalid),
 	new_TestFixture(test_ndn_interest_get_name__valid),
+	new_TestFixture(test_ndn_interest_get_nonce__valid),
+	new_TestFixture(test_ndn_interest_get_lifetime__valid),
     };
 
     EMB_UNIT_TESTCALLER(ndn_encoding_interest_tests, set_up, NULL, fixtures);

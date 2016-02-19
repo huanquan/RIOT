@@ -24,6 +24,7 @@
 #include <sys/types.h>
 
 #include "net/ndn/ndn-constants.h"
+#include "net/ndn/encoding/block.h"
 
 #ifdef __cplusplus
 extern "C" {

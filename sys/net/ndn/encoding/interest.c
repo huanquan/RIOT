@@ -116,4 +116,160 @@ int ndn_interest_get_name(gnrc_pktsnip_t* pkt, ndn_block_t* name)
     return 0;
 }
 
+int ndn_interest_get_nonce(gnrc_pktsnip_t* pkt, uint32_t* nonce)
+{
+    if (nonce == NULL || pkt == NULL || pkt->type != GNRC_NETTYPE_NDN) return -1;
+
+    const uint8_t* buf = (uint8_t*)pkt->data;
+    int len = pkt->size;
+    uint32_t num;
+    int l;
+
+    /* read interest type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_INTEREST) return -1;
+    buf += l;
+    len -= l;
+
+    /* read interest length and ignore the value */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_NAME) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name length and skip the components */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += (l + num);
+    len -= (l + num);
+
+    /* read and skip selectors */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num == NDN_TLV_SELECTORS) {
+	/* skip type */
+	buf += l;
+	len -= l;
+
+	/* read length and skip length and value */
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return -1;
+	buf += (l + num);
+	len -= (l + num);
+
+	/* read nonce type */
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return -1;
+    }
+
+    /* check for nonce type */
+    if (num != NDN_TLV_NONCE) return -1;
+    buf += l;
+    len -= l;
+
+    /* check nonce length */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != 4) return -1;
+    buf += l;
+    len -= l;
+
+    /* read nonce value */
+    if (len < 4) return -1;
+    ndn_block_get_integer(buf, 4, nonce);
+    return 0;
+}
+
+int ndn_interest_get_lifetime(gnrc_pktsnip_t* pkt, uint32_t* life)
+{
+    if (life == NULL || pkt == NULL || pkt->type != GNRC_NETTYPE_NDN) return -1;
+
+    const uint8_t* buf = (uint8_t*)pkt->data;
+    int len = pkt->size;
+    uint32_t num;
+    int l;
+
+    /* read interest type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_INTEREST) return -1;
+    buf += l;
+    len -= l;
+
+    /* read interest length and ignore the value */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_NAME) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name length and skip the components */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += (l + num);
+    len -= (l + num);
+
+    /* read and skip selectors */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num == NDN_TLV_SELECTORS) {
+	/* skip type */
+	buf += l;
+	len -= l;
+
+	/* read length and skip length and value */
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return -1;
+	buf += (l + num);
+	len -= (l + num);
+
+	/* read nonce type */
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return -1;
+    }
+
+    /* check for nonce type */
+    if (num != NDN_TLV_NONCE) return -1;
+    buf += l;
+    len -= l;
+
+    /* check nonce length and skip the value */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != 4) return -1;
+    buf += (l + num);
+    len -= (l + num);
+
+    /* read lifetime type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_INTERESTLIFETIME) return -1;
+    buf += l;
+    len -= l;
+
+    /* read lifetime length */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += l;
+    len -= l;
+
+    l = ndn_block_get_integer(buf, num, life);
+    if (l < 0) return -1;
+    else return 0;
+}
+
 /** @} */
