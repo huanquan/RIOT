@@ -19,7 +19,6 @@
 #include <string.h>
 
 #include "net/ndn/ndn-constants.h"
-#include "net/ndn/encoding/block.h"
 #include "net/ndn/encoding/name.h"
 
 #define ENABLE_DEBUG (0)

@@ -44,7 +44,7 @@ typedef struct ndn_block {
  * @brief   Reads a variable-length encoded integer in the beginning of a buffer.
  *
  * @param[in]  buf       Buffer to read from.
- * @param[in]  len       Size of the TLV block pointed by @p buf.
+ * @param[in]  len       Size of the buffer pointed by @p buf.
  * @param[out] num       Place to store the result.
  *
  * @return  The number of bytes occupied by the encoded number.
@@ -60,7 +60,7 @@ int ndn_block_get_var_number(const uint8_t* buf, int len, uint32_t* num);
  *
  * @param[in]  num       Number to encode.
  * @param[out] buf       Buffer to write @p num into.
- * @param[in]  len       Size of the TLV block pointed by @p buf.
+ * @param[in]  len       Size of the buffer pointed by @p buf.
  *
  * @return  The number of bytes written into the buffer.
  * @return  -1, if there is not enough space to write @p num.
@@ -111,6 +111,18 @@ int ndn_block_integer_length(uint32_t num);
  */
 int ndn_block_put_integer(uint32_t num, uint8_t* buf, int len);
 
+/**
+ * @brief   Reads a non-negative integer from the beginning of a buffer.
+ *
+ * @param[in]  buf       Buffer to read from.
+ * @param[in]  len       Size of the buffer. Must be 1, 2, or 4.
+ * @param[out] num       Place to stored the integer.
+ *
+ * @return  Number of bytes occupied by the integer.
+ * @return  -1, if @p num or @p buf is NULL.
+ * @return  -1, if @p len is not 1, 2, or 4.
+ */
+int ndn_block_get_integer(const uint8_t* buf, int len, uint32_t* num);
 
 #ifdef __cplusplus
 }
