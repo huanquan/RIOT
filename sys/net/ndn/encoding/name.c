@@ -14,10 +14,10 @@
  *
  * @author  Wentao Shang <wentaoshang@gmail.com>
  */
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "net/gnrc/nettype.h"
 #include "net/ndn/ndn-constants.h"
 #include "net/ndn/encoding/block.h"
 #include "net/ndn/encoding/name.h"
@@ -129,27 +129,14 @@ int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len)
     return tl;
 }
 
-int ndn_packet_get_name_size(gnrc_pktsnip_t* pkt)
+int ndn_name_get_size_from_block(ndn_block_t* block)
 {
-    if (pkt == NULL || pkt->type != GNRC_NETTYPE_NDN) return -1;
+    if (block == NULL || block->buf == NULL || block->len <= 0) return -1;
 
-    uint8_t* buf = (uint8_t*)pkt->data;
-    int len = pkt->size;
+    const uint8_t* buf = block->buf;
+    int len = block->len;
     uint32_t num;
     int l;
-
-    /* read packet type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_INTEREST && num != NDN_TLV_DATA) return -1;
-    buf += l;
-    len -= l;
-
-    /* skip packet length field */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    buf += l;
-    len -= l;
 
     /* read name type */
     l = ndn_block_get_var_number(buf, len, &num);
@@ -194,29 +181,16 @@ int ndn_packet_get_name_size(gnrc_pktsnip_t* pkt)
     return res;
 }
 
-int ndn_packet_get_name_component(gnrc_pktsnip_t* pkt, int pos, ndn_name_component_t* comp)
+int ndn_name_get_component_from_block(ndn_block_t* block, int pos, ndn_name_component_t* comp)
 {
     if (comp == NULL || pos < 0) return -1;
 
-    if (pkt == NULL || pkt->type != GNRC_NETTYPE_NDN) return -1;
+    if (block == NULL || block->buf == NULL || block->len <= 0) return -1;
 
-    uint8_t* buf = (uint8_t*)pkt->data;
-    int len = pkt->size;
+    const uint8_t* buf = block->buf;
+    int len = block->len;
     uint32_t num;
     int l;
-
-    /* read packet type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_INTEREST && num != NDN_TLV_DATA) return -1;
-    buf += l;
-    len -= l;
-
-    /* skip packet length field */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    buf += l;
-    len -= l;
 
     /* read name type */
     l = ndn_block_get_var_number(buf, len, &num);
