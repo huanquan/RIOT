@@ -35,23 +35,29 @@ gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, uint32_t 
     int name_len = ndn_name_total_length(name);
     if (name_len <= 0) return NULL;
 
-    int nonce_lt_len = 8 + ndn_block_integer_length(lifetime);
+    int lt_len = ndn_block_integer_length(lifetime); // length of the lifetime value
 
-    if (name_len + nonce_lt_len > 253)
+    if (name_len + lt_len + 8 > 253)
 	return NULL;  //TODO: support multi-byte length field.
 
-    gnrc_pktsnip_t *head_snip = NULL, *nonce_lt_snip = NULL;
+    gnrc_pktsnip_t *pkt = NULL;
     uint8_t* buf = NULL;
 
     // Create nonce+lifetime snip.
-    nonce_lt_snip = gnrc_pktbuf_add(NULL, NULL, nonce_lt_len, GNRC_NETTYPE_NDN);
-    if (nonce_lt_snip == NULL) {
-	DEBUG("ndn_encoding: cannot create nonce+lifetime snip: unable to allocate packet\n");
+    pkt = gnrc_pktbuf_add(NULL, NULL, 10 + name_len + lt_len, GNRC_NETTYPE_NDN);
+    if (pkt == NULL) {
+	DEBUG("ndn_encoding: cannot create interest packet snip: unable to allocate packet\n");
         return NULL;
     }
-    buf = (uint8_t*) (nonce_lt_snip->data);
+    buf = (uint8_t*)pkt->data;
+
+    // Fill in the Interest header and name field.
+    buf[0] = NDN_TLV_INTEREST;
+    buf[1] = pkt->size - 2;
+    ndn_name_wire_encode(name, buf + 2, name_len);
     
     // Fill in the nonce.
+    buf += name_len + 2;
     uint32_t nonce = genrand_uint32();
     buf[0] = NDN_TLV_NONCE;
     buf[1] = 4;  // Nonce field length
@@ -59,26 +65,13 @@ gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, uint32_t 
     buf[3] = (nonce >> 16) & 0xFF;
     buf[4] = (nonce >> 8) & 0xFF;
     buf[5] = nonce & 0xFF;
+
+    // Fill in the lifetime
     buf[6] = NDN_TLV_INTERESTLIFETIME;
-    buf[7] = nonce_lt_len - 8;  // Lifetime field length
+    buf[7] = lt_len;
     ndn_block_put_integer(lifetime, buf + 8, buf[7]);
 
-
-    // Create header+name snip.
-    head_snip = gnrc_pktbuf_add(nonce_lt_snip, NULL, 2 + name_len, GNRC_NETTYPE_NDN);
-    if (head_snip == NULL) {
-	DEBUG("ndn_encoding: cannot create header+name snip: unable to allocate packet\n");
-	gnrc_pktbuf_release(nonce_lt_snip);
-        return NULL;
-    }
-    buf = (uint8_t*) (head_snip->data);
-
-    // Fill in the Interest header and name field.
-    buf[0] = NDN_TLV_INTEREST;
-    buf[1] = name_len + nonce_lt_len;
-    ndn_name_wire_encode(name, buf + 2, name_len);
-
-    return head_snip;
+    return pkt;
 }
 
 
