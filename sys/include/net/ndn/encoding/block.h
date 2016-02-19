@@ -30,6 +30,17 @@ extern "C" {
 #endif
 
 /**
+ * @brief   Type to represent a block of memory storing TLV-encoded data.
+ * @details This structure does not own the memory pointed by @p buf.
+ *          The user must make sure the memory pointed by @p buf is still valid
+ *          as long as this structure is in use.
+ */
+typedef struct ndn_block {
+    const uint8_t* buf;      /**< pointer to the memory buffer */
+    int len;                 /**< size of the buffer */
+} ndn_block_t;
+
+/**
  * @brief   Reads a variable-length encoded integer in the beginning of a buffer.
  *
  * @param[in]  buf       Buffer to read from.

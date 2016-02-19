@@ -23,7 +23,6 @@
 #include <inttypes.h>
 #include <sys/types.h>
 
-#include "net/gnrc/pktbuf.h"
 #include "net/ndn/ndn-constants.h"
 
 #ifdef __cplusplus
@@ -31,15 +30,9 @@ extern "C" {
 #endif
 
 /**
- * @brief   Type to represent a name component.
- * @details This structure does not own the memory pointed by @p buf.
- *          The user must make sure the memory pointed by @p buf is still valid
- *          as long as this structure is in use.
+ * @brief   Type to represent a name component. An alias for @ref ndn_block_t.
  */
-typedef struct ndn_name_component {
-    const uint8_t* buf;      /**< pointer to the memory buffer of the component */
-    int len;                 /**< size of the buffer */
-} ndn_name_component_t;
+typedef ndn_block_t ndn_name_component_t;
 
 
 /**
@@ -141,22 +134,21 @@ int ndn_name_total_length(ndn_name_t* name);
 int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len);
 
 /**
- * @brief   Gets the number of name components in an Interest or Data packet.
+ * @brief   Gets the number of name components in a TLV-encoded NDN name.
  *
- * @param[in]  pkt    Packet buffer containing a TLV-encoded NDN packet.
+ * @param[in]  block  TLV block containing a TLV-encoded NDN name.
  *
- * @return  Number of name components in the packet.
- * @return  -1, if @p pkt is NULL.
- * @return  -1, if @p pkt is not an NDN packet.
- * @return  -1, if @p pkt does not contain a complete name.
+ * @return  Number of name components in the name.
+ * @return  -1, if @p block is NULL.
+ * @return  -1, if @p pkt does not contain a valid name.
  */
-int ndn_packet_get_name_size(gnrc_pktsnip_t* pkt);
+int ndn_name_get_size_from_block(ndn_block_t* block);
 
 
 /**
- * @brief   Gets the n-th name component from an Interest or Data packet.
+ * @brief   Gets the n-th name component from a TLV-encoded NDN name.
  *
- * @param[in]  pkt    Packet buffer containing a TLV-encoded NDN packet.
+ * @param[in]  block  TLV block containing a TLV-encoded NDN name.
  * @param[in]  pos    Position of the name component to be retrieved (zero-indexed).
  *                    Cannot be negative.
  * @param[out] comp   Place to hold the name component structure.
@@ -165,12 +157,11 @@ int ndn_packet_get_name_size(gnrc_pktsnip_t* pkt);
  *
  *
  * @return  0, if success.
- * @return  -1, if @p pkt or @p comp is NULL.
- * @return  -1, if @p pkt is not an NDN packet.
- * @return  -1, if @p pkt does not contain a complete name.
+ * @return  -1, if @p block or @p comp is NULL.
+ * @return  -1, if @p block does not contain a valid name.
  * @return  -1, if @p pos >= the total number of name components.
  */
-int ndn_packet_get_name_component(gnrc_pktsnip_t* pkt, int pos, ndn_name_component_t* comp);
+int ndn_name_get_component_from_block(ndn_block_t* block, int pos, ndn_name_component_t* comp);
 
 #ifdef __cplusplus
 }
