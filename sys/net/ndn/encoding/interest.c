@@ -26,7 +26,7 @@
 #include "debug.h"
 
 
-gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, unsigned int lifetime)
+gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, uint32_t lifetime)
 {
     if (name == NULL) return NULL;
 
@@ -79,6 +79,48 @@ gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, unsigned 
     ndn_name_wire_encode(name, buf + 2, name_len);
 
     return head_snip;
+}
+
+
+int ndn_interest_get_name(gnrc_pktsnip_t* pkt, ndn_block_t* name)
+{
+    if (name == NULL || pkt == NULL || pkt->type != GNRC_NETTYPE_NDN) return -1;
+
+    const uint8_t* buf = (uint8_t*)pkt->data;
+    int len = pkt->size;
+    uint32_t num;
+    int l;
+
+    /* read interest type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_INTEREST) return -1;
+    buf += l;
+    len -= l;
+
+    /* read interest length and ignore the value */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    if (num != NDN_TLV_NAME) return -1;
+    buf += l;
+    len -= l;
+
+    /* read name length */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+
+    if ((int)num > len - l)  // entire name must reside in a continuous memory block
+	return -1;
+
+    name->buf = buf - 1;
+    name->len = (int)num + l + 1;
+    return 0;
 }
 
 /** @} */

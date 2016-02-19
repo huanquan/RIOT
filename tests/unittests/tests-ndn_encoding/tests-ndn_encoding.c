@@ -561,11 +561,52 @@ static void test_ndn_interest_create__valid(void)
     gnrc_pktbuf_release(pkt);
 }
 
+static void test_ndn_interest_get_name__invalid(void)
+{
+    ndn_block_t name;
+
+    uint8_t buf1[] = {NDN_TLV_INTEREST, 100, NDN_TLV_SELECTORS, 2, 3, 4};
+    gnrc_pktsnip_t* pkt1 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1), GNRC_NETTYPE_UNDEF);
+    gnrc_pktsnip_t* pkt2 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1), GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(NULL, &name));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt1, NULL));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt1, &name));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt2, &name));
+
+    uint8_t buf2[] = {NDN_TLV_INTEREST, 100, NDN_TLV_NAME, 10};
+    gnrc_pktsnip_t* pkt3 = gnrc_pktbuf_add(NULL, buf2, sizeof(buf2), GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt3, &name));
+
+    uint8_t buf3[]  = {NDN_TLV_SELECTORS, 100, NDN_TLV_NAME, 10};
+    gnrc_pktsnip_t* pkt4 = gnrc_pktbuf_add(NULL, buf3, sizeof(buf3), GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt4, &name));
+}
+
+static void test_ndn_interest_get_name__valid(void)
+{
+    ndn_block_t name;
+
+    uint8_t buf[] = {
+	NDN_TLV_INTEREST, 26,
+	NDN_TLV_NAME, 14,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
+    };
+    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf), GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_name(pkt, &name));
+    TEST_ASSERT(name.buf == (uint8_t*)pkt->data + 2);
+    TEST_ASSERT_EQUAL_INT(16, name.len);
+}
+
 Test *tests_ndn_encoding_interest_tests(void)
 {
     EMB_UNIT_TESTFIXTURES(fixtures) {
         new_TestFixture(test_ndn_interest_create__invalid),
 	new_TestFixture(test_ndn_interest_create__valid),
+	new_TestFixture(test_ndn_interest_get_name__invalid),
+	new_TestFixture(test_ndn_interest_get_name__valid),
     };
 
     EMB_UNIT_TESTCALLER(ndn_encoding_interest_tests, set_up, NULL, fixtures);
