@@ -72,40 +72,52 @@ extern "C" {
 gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, uint32_t lifetime);
 
 /**
- * @brief  Retrieve the TLV-encoded name from an Interest packet as a block.
+ * @brief  Retrieve the TLV-encoded Interest packet as a block.
  *
  * @param[in]  pkt        Packet snip containing the Interest packet.
+ * @param[out] block      Place to store the TLV block of the Interest.
+ *
+ * @return  0, if success.
+ * @return  -1, if @p pkt or @p block is NULL.
+ * @return  -1, if @p pkt is invalid or incomplete.
+ */
+int ndn_interest_get_block(gnrc_pktsnip_t* pkt, ndn_block_t* block);
+
+/**
+ * @brief  Retrieve the TLV-encoded name from an Interest TLV block.
+ *
+ * @param[in]  block      TLV block containing the Interest packet.
  * @param[out] name       Place to store the TLV block of the name.
  *
  * @return  0, if success.
- * @return  -1, if @p pkt or @p name is NULL.
- * @return  -1, if @p pkt is invalid or incomplete.
+ * @return  -1, if @p block or @p name is NULL.
+ * @return  -1, if @p block is invalid or incomplete.
  */
-int ndn_interest_get_name(gnrc_pktsnip_t* pkt, ndn_block_t* name);
+int ndn_interest_get_name(ndn_block_t* block, ndn_block_t* name);
 
 /**
- * @brief  Retrieve the nonce value from an Interest packet.
+ * @brief  Retrieve the nonce value from an Interest TLV block.
  *
- * @param[in]  pkt        Packet snip containing the Interest packet.
+ * @param[in]  block      TLV block containing the Interest packet.
  * @param[out] nonce      Place to store the nonce value.
  *
  * @return  0, if success.
- * @return  -1, if @p pkt or @p nonce is NULL.
- * @return  -1, if @p pkt is invalid or incomplete.
+ * @return  -1, if @p block or @p nonce is NULL.
+ * @return  -1, if @p block is invalid or incomplete.
  */
-int ndn_interest_get_nonce(gnrc_pktsnip_t* pkt, uint32_t* nonce);
+int ndn_interest_get_nonce(ndn_block_t* block, uint32_t* nonce);
 
 /**
- * @brief  Retrieve the lifetime value from an Interest packet.
+ * @brief  Retrieve the lifetime value from an Interest TLV block.
  *
- * @param[in]  pkt        Packet snip containing the Interest packet.
+ * @param[in]  block      TLV block containing the Interest packet.
  * @param[out] life       Place to store the lifetime value.
  *
  * @return  0, if success.
- * @return  -1, if @p pkt or @p life is NULL.
- * @return  -1, if @p pkt is invalid or incomplete.
+ * @return  -1, if @p block or @p life is NULL.
+ * @return  -1, if @p block is invalid or incomplete.
  */
-int ndn_interest_get_lifetime(gnrc_pktsnip_t* pkt, uint32_t* life);
+int ndn_interest_get_lifetime(ndn_block_t* block, uint32_t* life);
 
 
 #ifdef __cplusplus
