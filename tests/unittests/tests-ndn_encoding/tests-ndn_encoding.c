@@ -555,25 +555,61 @@ static void test_ndn_interest_create__valid(void)
     gnrc_pktbuf_release(pkt);
 }
 
+static void test_ndn_interest_get_block__invalid(void)
+{
+    ndn_block_t block;
+
+    uint8_t buf1[] = {NDN_TLV_INTEREST, 100};
+    gnrc_pktsnip_t* pkt1 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1), GNRC_NETTYPE_UNDEF);
+    gnrc_pktsnip_t* pkt2 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1), GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(NULL, &block));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(pkt1, NULL));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(pkt1, &block));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(pkt2, &block));
+
+    uint8_t buf2[]  = {NDN_TLV_SELECTORS, 100, NDN_TLV_NAME, 10};
+    gnrc_pktsnip_t* pkt3 = gnrc_pktbuf_add(NULL, buf2, sizeof(buf2), GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(pkt3, &block));
+}
+
+static void test_ndn_interest_get_block__valid(void)
+{
+    ndn_block_t block;
+
+    uint8_t buf[] = {
+	NDN_TLV_INTEREST, 26,
+	NDN_TLV_NAME, 14,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
+    	NDN_TLV_NONCE, 4,
+	0x76, 0x54, 0x32, 0x10,
+    	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
+    };
+    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf), GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_block(pkt, &block));
+    TEST_ASSERT((uint8_t*)pkt->data == block.buf);
+    TEST_ASSERT_EQUAL_INT(gnrc_pkt_len(pkt), block.len);
+}
+
 static void test_ndn_interest_get_name__invalid(void)
 {
     ndn_block_t name;
 
     uint8_t buf1[] = {NDN_TLV_INTEREST, 100, NDN_TLV_SELECTORS, 2, 3, 4};
-    gnrc_pktsnip_t* pkt1 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1), GNRC_NETTYPE_UNDEF);
-    gnrc_pktsnip_t* pkt2 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1), GNRC_NETTYPE_NDN);
+    ndn_block_t block1 = {buf1, sizeof(buf1)};
     TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(NULL, &name));
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt1, NULL));
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt1, &name));
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt2, &name));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(&block1, NULL));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(&block1, &name));
 
     uint8_t buf2[] = {NDN_TLV_INTEREST, 100, NDN_TLV_NAME, 10};
-    gnrc_pktsnip_t* pkt3 = gnrc_pktbuf_add(NULL, buf2, sizeof(buf2), GNRC_NETTYPE_NDN);
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt3, &name));
+    ndn_block_t block2 = {buf2, sizeof(buf2)};
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(&block2, &name));
 
     uint8_t buf3[]  = {NDN_TLV_SELECTORS, 100, NDN_TLV_NAME, 10};
-    gnrc_pktsnip_t* pkt4 = gnrc_pktbuf_add(NULL, buf3, sizeof(buf3), GNRC_NETTYPE_NDN);
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(pkt4, &name));
+    ndn_block_t block3 = {buf3, sizeof(buf3)};
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_name(&block3, &name));
 }
 
 static void test_ndn_interest_get_name__valid(void)
@@ -588,9 +624,9 @@ static void test_ndn_interest_get_name__valid(void)
 	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
 	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
     };
-    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf), GNRC_NETTYPE_NDN);
-    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_name(pkt, &name));
-    TEST_ASSERT(name.buf == (uint8_t*)pkt->data + 2);
+    ndn_block_t block = {buf, sizeof(buf)};
+    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_name(&block, &name));
+    TEST_ASSERT(name.buf == buf + 2);
     TEST_ASSERT_EQUAL_INT(16, name.len);
 }
 
@@ -609,8 +645,8 @@ static void test_ndn_interest_get_nonce__valid(void)
 	0x76, 0x54, 0x32, 0x10,
     	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
     };
-    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf), GNRC_NETTYPE_NDN);
-    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_nonce(pkt, &nonce));
+    ndn_block_t block = {buf, sizeof(buf)};
+    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_nonce(&block, &nonce));
     TEST_ASSERT_EQUAL_INT(0x76543210, nonce);
 }
 
@@ -629,8 +665,8 @@ static void test_ndn_interest_get_lifetime__valid(void)
 	0x76, 0x54, 0x32, 0x10,
     	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
     };
-    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf), GNRC_NETTYPE_NDN);
-    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_lifetime(pkt, &lifetime));
+    ndn_block_t block = {buf, sizeof(buf)};
+    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_lifetime(&block, &lifetime));
     TEST_ASSERT_EQUAL_INT(0x4000, lifetime);
 }
 
@@ -639,6 +675,8 @@ Test *tests_ndn_encoding_interest_tests(void)
     EMB_UNIT_TESTFIXTURES(fixtures) {
         new_TestFixture(test_ndn_interest_create__invalid),
 	new_TestFixture(test_ndn_interest_create__valid),
+	new_TestFixture(test_ndn_interest_get_block__invalid),
+	new_TestFixture(test_ndn_interest_get_block__valid),
 	new_TestFixture(test_ndn_interest_get_name__invalid),
 	new_TestFixture(test_ndn_interest_get_name__valid),
 	new_TestFixture(test_ndn_interest_get_nonce__valid),
