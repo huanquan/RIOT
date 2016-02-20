@@ -16,9 +16,10 @@
  */
 #include "net/gnrc/netapi.h"
 #include "net/gnrc/netif.h"
-#include "net/gnrc/netif/hdr.h"
 #include "net/gnrc/netreg.h"
 
+#include "net/ndn/face_table.h"
+#include "net/ndn/netif.h"
 #include "net/ndn/ndn.h"
 
 #define ENABLE_DEBUG (1)
@@ -42,6 +43,9 @@ static void *_event_loop(void *args);
 
 kernel_pid_t ndn_init(void)
 {
+    ndn_face_table_init();
+    ndn_netif_auto_add();
+    
     /* check if thread is already running */
     if (ndn_pid == KERNEL_PID_UNDEF) {
         /* start UDP thread */
@@ -76,12 +80,14 @@ static void *_event_loop(void *args)
 
         switch (msg.type) {
             case GNRC_NETAPI_MSG_TYPE_RCV:
-                DEBUG("ndn: GNRC_NETAPI_MSG_TYPE_RCV received\n");
+                DEBUG("ndn: RCV message received from pid %u\n",
+		      (uint32_t)msg.sender_pid);
                 _receive((gnrc_pktsnip_t *)msg.content.ptr);
                 break;
 
             case GNRC_NETAPI_MSG_TYPE_SND:
-                DEBUG("ndn: GNRC_NETAPI_MSG_TYPE_SND received\n");
+                DEBUG("ndn: SND message received from pid %u\n",
+		      (uint32_t)msg.sender_pid);
                 _send((gnrc_pktsnip_t *)msg.content.ptr);
                 break;
 
@@ -145,44 +151,8 @@ static void _send(gnrc_pktsnip_t *pkt)
     }
 
     /* send to the first available interface */
-    gnrc_pktsnip_t *netif;
     kernel_pid_t iface = ifs[0];
-
-    /* allocate interface header */
-    netif = gnrc_netif_hdr_build(NULL, 0, NULL, 0);
-
-    if (netif == NULL) {
-	DEBUG("ndn: error on interface header allocation, "
-	      "dropping packet\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    /* add interface header to packet */
-    LL_PREPEND(pkt, netif);
-
-    /* mark as broadcast */
-    ((gnrc_netif_hdr_t *)pkt->data)->flags |= GNRC_NETIF_HDR_FLAGS_BROADCAST;
-    ((gnrc_netif_hdr_t *)pkt->data)->if_pid = iface;
-
-    /* check MTU */
-    uint16_t mtu;
-    if ((gnrc_netapi_get(iface, NETOPT_MAX_PACKET_SIZE, 0, &mtu,
-			 sizeof(uint16_t)) >= 0)) {
-	if (gnrc_pkt_len(pkt->next) > mtu) {
-	    DEBUG("ndn: packet too big\n");
-	    gnrc_pktbuf_release(pkt);
-	    return;
-	}
-    }
-
-    /* send to interface */
-    if (gnrc_netapi_send(iface, pkt) < 1) {
-        DEBUG("ndn: unable to send packet\n");
-        gnrc_pktbuf_release(pkt);
-    }
-
-    DEBUG("ndn: successfully sent packet\n");
+    ndn_netif_send(iface, pkt);
     return;
 }
 
