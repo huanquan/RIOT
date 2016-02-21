@@ -54,6 +54,7 @@ int ndn_face_table_add(kernel_pid_t id, int type)
 	return -1;
     }
 
+    entry->prev = entry->next = NULL;
     entry->id = id;
     entry->type = type;
     DL_PREPEND(_face_table, entry);
