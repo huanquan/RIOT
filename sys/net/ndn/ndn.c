@@ -17,9 +17,13 @@
 #include "net/gnrc/netapi.h"
 #include "net/gnrc/netif.h"
 #include "net/gnrc/netreg.h"
+#include "timex.h"
+#include "xtimer.h"
 
 #include "net/ndn/face_table.h"
 #include "net/ndn/netif.h"
+#include "net/ndn/pit.h"
+#include "net/ndn/encoding/interest.h"
 #include "net/ndn/ndn.h"
 
 #define ENABLE_DEBUG (1)
@@ -31,13 +35,28 @@ static char _stack[GNRC_NDN_STACK_SIZE + THREAD_EXTRA_STACKSIZE_PRINTF];
 static char _stack[GNRC_NDN_STACK_SIZE];
 #endif
 
-
 kernel_pid_t ndn_pid = KERNEL_PID_UNDEF;
+
+/* helper to setup a timer that interrupts the event loop */
+int _set_timeout(xtimer_t* timer, uint32_t us, msg_t* msg)
+{
+    /* initialize the timer struct */
+    timer->target = timer->long_target = 0;
+
+    /* initialize the msg struct */
+    msg->type = MSG_XTIMER;
+    msg->content.ptr = (char*)msg;
+
+    /* set a timer to send a message to ndn thread */
+    xtimer_set_msg(timer, us, msg, thread_getpid());
+
+    return 0;
+}
 
 /* handles GNRC_NETAPI_MSG_TYPE_RCV commands */
 static void _receive(gnrc_pktsnip_t *pkt);
 /* sends packet over the appropriate interface(s) */
-static void _send(gnrc_pktsnip_t *pkt);
+static void _send(kernel_pid_t face_id, int face_type, gnrc_pktsnip_t *pkt);
 /* Main event loop for NDN */
 static void *_event_loop(void *args);
 
@@ -45,6 +64,8 @@ kernel_pid_t ndn_init(void)
 {
     ndn_face_table_init();
     ndn_netif_auto_add();
+
+    ndn_pit_init();
     
     /* check if thread is already running */
     if (ndn_pid == KERNEL_PID_UNDEF) {
@@ -79,6 +100,11 @@ static void *_event_loop(void *args)
         msg_receive(&msg);
 
         switch (msg.type) {
+	    case MSG_XTIMER:
+		DEBUG("ndn: XTIMER message received from pid %u\n",
+		      (uint32_t)msg.sender_pid);
+		ndn_pit_remove((msg_t*)msg.content.ptr);
+		break;
             case GNRC_NETAPI_MSG_TYPE_RCV:
                 DEBUG("ndn: RCV message received from pid %u\n",
 		      (uint32_t)msg.sender_pid);
@@ -88,7 +114,8 @@ static void *_event_loop(void *args)
             case GNRC_NETAPI_MSG_TYPE_SND:
                 DEBUG("ndn: SND message received from pid %u\n",
 		      (uint32_t)msg.sender_pid);
-                _send((gnrc_pktsnip_t *)msg.content.ptr);
+                _send(msg.sender_pid, NDN_FACE_APP,
+		      (gnrc_pktsnip_t *)msg.content.ptr);
                 break;
 
             case GNRC_NETAPI_MSG_TYPE_GET:
@@ -127,17 +154,43 @@ static void _receive(gnrc_pktsnip_t *pkt)
     return;
 }
 
-
-static void _send(gnrc_pktsnip_t *pkt)
+static void _process_interest(kernel_pid_t face_id, int face_type,
+			      gnrc_pktsnip_t *pkt)
 {
-    if (pkt == NULL) return;
-
-    /* ignore any non-NDN packet snip */
-    if (pkt->type != GNRC_NETTYPE_NDN) {
-	DEBUG("ndn: SND command with unknown packet type\n");
+    ndn_block_t block;
+    if (ndn_interest_get_block(pkt, &block) < 0) {
+	DEBUG("ndn: cannot get block from interest packet\n");
 	gnrc_pktbuf_release(pkt);
 	return;
     }
+
+    uint32_t lifetime;
+    if (0 != ndn_interest_get_lifetime(&block, &lifetime)) {
+	DEBUG("ndn: cannot get lifetime from Interest block\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }
+
+    if (lifetime > 0x400000) {
+	DEBUG("ndn: interest lifetime in us exceeds 32-bit\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }
+
+    /* convert lifetime to us */
+    lifetime *= MS_IN_USEC;
+
+    /* add to pit table */
+    ndn_pit_entry_t *pit_entry =
+	ndn_pit_add(face_id, face_type, &block, lifetime);
+    if (pit_entry == NULL) {
+	DEBUG("ndn: cannot add new pit entry\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }	
+
+    /* set pit entry timer */
+    _set_timeout(&pit_entry->timer, lifetime, &pit_entry->timer_msg);
 
     /* get list of interfaces */
     kernel_pid_t ifs[GNRC_NETIF_NUMOF];
@@ -153,6 +206,40 @@ static void _send(gnrc_pktsnip_t *pkt)
     /* send to the first available interface */
     kernel_pid_t iface = ifs[0];
     ndn_netif_send(iface, pkt);
+    return;
+}
+
+static void _send(kernel_pid_t face_id, int face_type, gnrc_pktsnip_t *pkt)
+{
+    if (pkt == NULL) return;
+
+    /* ignore any non-NDN packet snip */
+    if (pkt->type != GNRC_NETTYPE_NDN) {
+	DEBUG("ndn: SND command with unknown packet type\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }
+
+    const uint8_t* buf = (uint8_t*)pkt->data;
+    int len = pkt->size;
+    uint32_t num;
+
+    if (ndn_block_get_var_number(buf, len, &num) < 0) {
+	DEBUG("ndn: cannot read packet type\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }
+
+    switch (num) {
+        case NDN_TLV_INTEREST:
+	    _process_interest(face_id, face_type, pkt);
+	    break;
+        case NDN_TLV_DATA:
+        default:
+	    DEBUG("ndn: unknown packet type\n");
+	    gnrc_pktbuf_release(pkt);
+	    break;
+    }
     return;
 }
 

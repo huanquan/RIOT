@@ -63,7 +63,7 @@ ndn_face_entry_t* ndn_face_table_find(kernel_pid_t id);
 
 
 /**
- * @brief      Gets an entry to the face table.
+ * @brief      Adds an entry to the face table.
  * 
  * @param[in]  id     Face id.
  * @param[in]  type   Face type.
