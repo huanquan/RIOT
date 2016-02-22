@@ -38,19 +38,10 @@ static char _stack[GNRC_NDN_STACK_SIZE];
 kernel_pid_t ndn_pid = KERNEL_PID_UNDEF;
 
 /* helper to setup a timer that interrupts the event loop */
-int _set_timeout(xtimer_t* timer, uint32_t us, msg_t* msg)
+void _set_timeout(ndn_pit_entry_t* entry, uint32_t us)
 {
-    /* initialize the timer struct */
-    timer->target = timer->long_target = 0;
-
-    /* initialize the msg struct */
-    msg->type = MSG_XTIMER;
-    msg->content.ptr = (char*)msg;
-
     /* set a timer to send a message to ndn thread */
-    xtimer_set_msg(timer, us, msg, thread_getpid());
-
-    return 0;
+    xtimer_set_msg(&entry->timer, us, &entry->timer_msg, thread_getpid());
 }
 
 /* handles GNRC_NETAPI_MSG_TYPE_RCV commands */
@@ -181,16 +172,16 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
     lifetime *= MS_IN_USEC;
 
     /* add to pit table */
-    ndn_pit_entry_t *pit_entry =
-	ndn_pit_add(face_id, face_type, &block, lifetime);
+    ndn_pit_entry_t *pit_entry = ndn_pit_add(face_id, face_type, &block);
     if (pit_entry == NULL) {
 	DEBUG("ndn: cannot add new pit entry\n");
 	gnrc_pktbuf_release(pkt);
 	return;
     }	
 
-    /* set pit entry timer */
-    _set_timeout(&pit_entry->timer, lifetime, &pit_entry->timer_msg);
+    assert(pit_entry->face_list_size > 0);
+    /* set (or reset) the timer */
+    _set_timeout(pit_entry, lifetime);
 
     /* get list of interfaces */
     kernel_pid_t ifs[GNRC_NETIF_NUMOF];
