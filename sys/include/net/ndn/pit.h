@@ -23,7 +23,7 @@
 #include "kernel_types.h"
 #include "xtimer.h"
 
-#include "net/ndn/encoding/block.h"
+#include "net/ndn/shared_block.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,10 +40,9 @@ typedef struct _face_list_entry {
 typedef struct ndn_pit_entry {
     struct ndn_pit_entry *prev;
     struct ndn_pit_entry *next;
-    ndn_block_t name;   /**< TLV block of the name of the pending interest */
-    //TODO: add selectors to this struct
-    xtimer_t timer;     /**< xtimer struct */
-    msg_t timer_msg;    /**< special message to indicate timeout event */
+    ndn_shared_block_t *shared_pi;  /**< shared TLV block of the pending interest */
+    xtimer_t timer;                 /**< xtimer struct */
+    msg_t timer_msg;                /**< special message to indicate timeout event */
 
     // List of incoming faces
     _face_list_entry_t *face_list;

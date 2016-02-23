@@ -82,11 +82,14 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* b
     // check for interests with the same name and selectors
     ndn_pit_entry_t *entry;
     DL_FOREACH(_pit, entry) {
-	if (0 == memcmp(entry->name.buf, name.buf,
-			(entry->name.len < name.len ?
-			 entry->name.len : name.len))) {
+	// get and compare name
+	ndn_block_t pn;
+	int r = ndn_interest_get_name(&entry->shared_pi->block, &pn);
+	assert(r == 0);
+
+	if (0 == memcmp(pn.buf, name.buf,
+			(pn.len < name.len ? pn.len : name.len))) {
 	    // Found pit entry with the same name
-	    //TODO: also check selectors
 	    if (NULL ==  _pit_entry_add_face(entry, face_id, face_type))
 		return NULL;
 	    else {
@@ -95,6 +98,7 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* b
 		return entry;
 	    }
 	}
+	//TODO: also check selectors
     }
 
     // no pending entry found, allocate new entry
@@ -104,19 +108,16 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* b
 	return NULL;
     }
 
-    uint8_t *buf = (uint8_t*)malloc(name.len);
-    if (buf == NULL) {
+    entry->shared_pi = ndn_shared_block_create(block);
+    if (entry->shared_pi == NULL) {
 	free(entry);
-	DEBUG("ndn: cannot allocate buffer for name block in pit\n");
+	DEBUG("ndn: cannot allocate buffer for shared block in pit\n");
 	return NULL;
     }
-    memcpy(buf, name.buf, name.len);
 
     entry->prev = entry->next = NULL;
     entry->face_list = NULL;
     entry->face_list_size = 0;
-    entry->name.buf = buf;
-    entry->name.len = name.len;
 
     /* initialize the timer */
     entry->timer.target = entry->timer.long_target = 0;
@@ -126,7 +127,7 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* b
     entry->timer_msg.content.ptr = (char*)(&entry->timer_msg);
 
     if (NULL == _pit_entry_add_face(entry, face_id, face_type)) {
-	free((void*)entry->name.buf);
+	ndn_shared_block_release(entry->shared_pi);
 	free(entry);
 	return NULL;
     }
@@ -141,7 +142,7 @@ void _ndn_pit_release(ndn_pit_entry_t *entry)
     assert(_pit != NULL);
     DL_DELETE(_pit, entry);
     xtimer_remove(&entry->timer);
-    free((void*)entry->name.buf);
+    ndn_shared_block_release(entry->shared_pi);
     free(entry->face_list);
     free(entry);
 }
