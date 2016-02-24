@@ -22,7 +22,6 @@
 
 #include "kernel_types.h"
 #include "xtimer.h"
-
 #include "net/ndn/shared_block.h"
 
 #ifdef __cplusplus
@@ -63,9 +62,9 @@ typedef struct ndn_pit_entry {
 ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* block);
 
 /**
- * @brief  Remove the expired entry from PIT based on the @p msg pointer.
+ * @brief  Removes the expired entry from PIT based on the @p msg pointer.
  */
-void ndn_pit_remove(msg_t *msg);
+void ndn_pit_timeout(msg_t *msg);
 
 /**
  * @brief    Initializes the pending interest table.

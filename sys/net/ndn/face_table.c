@@ -44,13 +44,13 @@ int ndn_face_table_add(kernel_pid_t id, int type)
 {
     ndn_face_entry_t *entry = ndn_face_table_find(id);
     if (entry != NULL) {
-	DEBUG("ndn: face entry with id=%u already exists\n", (uint32_t)id);
+	DEBUG("ndn: face entry (id=%" PRIkernel_pid ") already exists\n", id);
 	return -1;
     }
 
     entry = (ndn_face_entry_t*)malloc(sizeof(ndn_face_entry_t));
     if (entry == NULL) {
-	DEBUG("ndn: cannot allocate face entry with id=%u\n", (uint32_t)id);
+	DEBUG("ndn: cannot allocate face entry (id=%" PRIkernel_pid ")\n", id);
 	return -1;
     }
 
