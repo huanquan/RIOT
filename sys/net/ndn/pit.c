@@ -19,6 +19,8 @@
 
 #include "utlist.h"
 #include "net/ndn/encoding/interest.h"
+#include "net/ndn/msg_type.h"
+#include "net/ndn/face_table.h"
 
 #include "net/ndn/pit.h"
 
@@ -93,7 +95,8 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* b
 	    if (NULL ==  _pit_entry_add_face(entry, face_id, face_type))
 		return NULL;
 	    else {
-		DEBUG("ndn: add to existing pit entry (face=%u)\n", face_id);
+		DEBUG("ndn: add to existing pit entry (face=%"
+		      PRIkernel_pid ")\n", face_id);
 		// caller need to reset timer after this function returns
 		return entry;
 	    }
@@ -133,7 +136,7 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* b
     }
 
     DL_PREPEND(_pit, entry);
-    DEBUG("ndn: add new pit entry (face=%u)\n", face_id);
+    DEBUG("ndn: add new pit entry (face=%" PRIkernel_pid ")\n", face_id);
     return entry;
 }
 
@@ -147,18 +150,34 @@ void _ndn_pit_release(ndn_pit_entry_t *entry)
     free(entry);
 }
 
-void ndn_pit_remove(msg_t *msg)
+void ndn_pit_timeout(msg_t *msg)
 {
-    if (_pit == NULL) {
-	DEBUG("ndn: pit is empty, skip remove\n");
-	return;
-    }
+    assert(_pit != NULL);
 
     ndn_pit_entry_t *elem, *tmp;
     DL_FOREACH_SAFE(_pit, elem, tmp) {
 	if (&elem->timer_msg == msg) {
-	    DEBUG("ndn: remove pit entry (face_list_size=%d)\n",
+	    DEBUG("ndn: remove pit entry due to timeout (face_list_size=%d)\n",
 		  elem->face_list_size);
+	    // notify app face, if any
+	    msg_t timeout;
+	    timeout.type = NDN_APP_MSG_TYPE_TIMEOUT;
+	    for (int i = 0; i < elem->face_list_size; ++i) {
+		if (elem->face_list[i].type == NDN_FACE_APP) {
+		    DEBUG("ndn: try to send timeout message to pid %"
+			  PRIkernel_pid "\n", elem->face_list[i].id);
+		    timeout.content.ptr =
+			(void*)ndn_shared_block_copy(elem->shared_pi);
+		    if (msg_try_send(&timeout, elem->face_list[i].id) < 1) {
+			DEBUG("ndn: cannot send timeout message to pid %"
+			      PRIkernel_pid "\n", elem->face_list[i].id);
+			// release the shared ptr here
+			ndn_shared_block_release((ndn_shared_block_t*)timeout.content.ptr);
+		    }
+		    // message delivered to app thread, which is responsible
+		    // for releasing the shared ptr
+		}
+	    }
 	    _ndn_pit_release(elem);
 	}
     }

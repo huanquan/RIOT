@@ -22,6 +22,7 @@
 #include <inttypes.h>
 
 #include "kernel.h"
+#include "net/ndn/app.h"
 #include "net/ndn/ndn.h"
 #include "net/ndn/encoding/name.h"
 #include "net/ndn/encoding/interest.h"
@@ -36,8 +37,13 @@ static gnrc_netreg_entry_t server = {
 };
 
 
-static void send_interest(void)
+static void run_consumer(void)
 {
+    ndn_app_t *handle = ndn_app_create();
+    if (handle == NULL) {
+	puts("ndn_test: cannot create app handle\n");
+    }
+
     /* build interest packet */
     uint8_t buf[6] = "abcdef";
     ndn_name_component_t comps[4] = {
@@ -47,18 +53,22 @@ static void send_interest(void)
 	{ buf + 4, 2 }
     };
     ndn_name_t name = { 4, comps };  // URI = /a/b/cd/ef
-    uint32_t lifetime = 0x4000;
+    uint32_t lifetime = 4000;  // 4 sec
 
     gnrc_pktsnip_t* inst = ndn_interest_create(&name, NULL, lifetime);
 
     /* send packet */
     if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_NDN, GNRC_NETREG_DEMUX_CTX_ALL, inst)) {
-	puts("Error: unable to locate NDN thread");
+	puts("ndn_test: unable to locate NDN thread\n");
 	gnrc_pktbuf_release(inst);
+	ndn_app_destroy(handle);
 	return;
     }
-    puts("Success: send interest\n");
-    //xtimer_usleep(1000000);
+    puts("ndn_test: interest sent\n");
+
+    ndn_app_run(handle);
+    puts("ndn_test: returned from app run loop\n");
+    ndn_app_destroy(handle);
 }
 
 static void start_dump(void)
@@ -91,12 +101,12 @@ static void stop_dump(void)
 int ndn_test(int argc, char **argv)
 {
     if (argc < 2) {
-        printf("usage: %s [send|server]\n", argv[0]);
+        printf("usage: %s [consumer|server]\n", argv[0]);
         return 1;
     }
 
-    if (strcmp(argv[1], "send") == 0) {
-	send_interest();
+    if (strcmp(argv[1], "consumer") == 0) {
+	run_consumer();
     }
     else if (strcmp(argv[1], "dump") == 0) {
         if (argc < 3) {

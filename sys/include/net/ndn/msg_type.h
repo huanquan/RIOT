@@ -1,0 +1,35 @@
+/*
+ * Copyright (C) 2016 Wentao Shang
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
+/**
+ * @defgroup    net_ndn    NDN packet processing
+ * @ingroup     net
+ * @brief       NDN packet sending and receiving.
+ * @{
+ *
+ * @file
+ * @brief   Message type for internal communication between NDN thread
+ *          and NDN App thread.
+ *
+ * @author  Wentao Shang <wentaoshang@gmail.com>
+ */
+#ifndef NDN_MSG_TYPE_H_
+#define NDN_MSG_TYPE_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define NDN_APP_MSG_TYPE_TIMEOUT    (0x0301)
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* NDN_MSG_TYPE_H_ */
+/** @} */

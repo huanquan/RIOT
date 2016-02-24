@@ -51,10 +51,11 @@ ndn_shared_block_t* ndn_shared_block_create(ndn_block_t* block)
 void ndn_shared_block_release(ndn_shared_block_t* shared)
 {
     assert(shared != NULL);
-    int old_ref = atomic_dec(&shared->ref);
-    if (old_ref == 1) {
+    int ref = atomic_dec(&shared->ref) - 1;
+    DEBUG("ndn: decrement shared block ref to %d\n", ref);
+    if (ref == 0) {
 	/* no one is using this block; free the memory. */
-	DEBUG("ndn: shared block ref dropped to zero, free memory\n");
+	DEBUG("ndn: free shared block memory\n");
 	free((void*)shared->block.buf);
 	free(shared);
     }

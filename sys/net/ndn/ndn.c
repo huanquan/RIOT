@@ -92,19 +92,19 @@ static void *_event_loop(void *args)
 
         switch (msg.type) {
 	    case MSG_XTIMER:
-		DEBUG("ndn: XTIMER message received from pid %u\n",
-		      (uint32_t)msg.sender_pid);
-		ndn_pit_remove((msg_t*)msg.content.ptr);
+		DEBUG("ndn: XTIMER message received from pid %" PRIkernel_pid "\n",
+		      msg.sender_pid);
+		ndn_pit_timeout((msg_t*)msg.content.ptr);
 		break;
             case GNRC_NETAPI_MSG_TYPE_RCV:
-                DEBUG("ndn: RCV message received from pid %u\n",
-		      (uint32_t)msg.sender_pid);
+                DEBUG("ndn: RCV message received from pid %" PRIkernel_pid "\n",
+		      msg.sender_pid);
                 _receive((gnrc_pktsnip_t *)msg.content.ptr);
                 break;
 
             case GNRC_NETAPI_MSG_TYPE_SND:
-                DEBUG("ndn: SND message received from pid %u\n",
-		      (uint32_t)msg.sender_pid);
+                DEBUG("ndn: SND message received from pid %" PRIkernel_pid "\n",
+		      msg.sender_pid);
                 _send(msg.sender_pid, NDN_FACE_APP,
 		      (gnrc_pktsnip_t *)msg.content.ptr);
                 break;
