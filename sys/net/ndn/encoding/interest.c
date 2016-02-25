@@ -26,34 +26,32 @@
 #include "debug.h"
 
 
-gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, uint32_t lifetime)
+int ndn_interest_create(ndn_name_t* name, void* selectors, uint32_t lifetime, ndn_block_t* block)
 {
-    if (name == NULL) return NULL;
+    if (name == NULL || block == NULL) return -1;
 
     (void)selectors;  //TODO: support selectors.
 
     int name_len = ndn_name_total_length(name);
-    if (name_len <= 0) return NULL;
+    if (name_len <= 0) return -1;
 
     int lt_len = ndn_block_integer_length(lifetime); // length of the lifetime value
 
     if (name_len + lt_len + 8 > 253)
-	return NULL;  //TODO: support multi-byte length field.
+	return -1;  //TODO: support multi-byte length field.
 
-    gnrc_pktsnip_t *pkt = NULL;
-    uint8_t* buf = NULL;
-
-    // Create nonce+lifetime snip.
-    pkt = gnrc_pktbuf_add(NULL, NULL, 10 + name_len + lt_len, GNRC_NETTYPE_NDN);
-    if (pkt == NULL) {
-	DEBUG("ndn_encoding: cannot create interest packet snip: unable to allocate packet\n");
-        return NULL;
+    block->len = 10 + name_len + lt_len;
+    uint8_t* buf = (uint8_t*)malloc(block->len);
+    if (buf == NULL) {
+	DEBUG("ndn_encoding: cannot allocate memory for interest block\n");
+	block->len = 0;
+        return -1;
     }
-    buf = (uint8_t*)pkt->data;
+    block->buf = buf;
 
     // Fill in the Interest header and name field.
     buf[0] = NDN_TLV_INTEREST;
-    buf[1] = pkt->size - 2;
+    buf[1] = block->len - 2;
     ndn_name_wire_encode(name, buf + 2, name_len);
     
     // Fill in the nonce.
@@ -71,6 +69,20 @@ gnrc_pktsnip_t* ndn_interest_create(ndn_name_t* name, void* selectors, uint32_t 
     buf[7] = lt_len;
     ndn_block_put_integer(lifetime, buf + 8, buf[7]);
 
+    return 0;
+}
+
+
+gnrc_pktsnip_t* ndn_interest_create_packet(ndn_block_t* block)
+{
+    if (block == NULL || block->buf == NULL || block->len <= 0) return NULL;
+
+    // Create nonce+lifetime snip.
+    gnrc_pktsnip_t *pkt = gnrc_pktbuf_add(NULL, (void*)block->buf, block->len, GNRC_NETTYPE_NDN);
+    if (pkt == NULL) {
+	DEBUG("ndn_encoding: cannot allocate packet snip for interest\n");
+        return NULL;
+    }
     return pkt;
 }
 

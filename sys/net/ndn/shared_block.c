@@ -20,7 +20,7 @@
 
 #include "net/ndn/shared_block.h"
 
-#define ENABLE_DEBUG (1)
+#define ENABLE_DEBUG (0)
 #include "debug.h"
 
 ndn_shared_block_t* ndn_shared_block_create(ndn_block_t* block)
@@ -48,6 +48,27 @@ ndn_shared_block_t* ndn_shared_block_create(ndn_block_t* block)
     return shared;
 }
 
+ndn_shared_block_t* ndn_shared_block_create_by_move(ndn_block_t* block)
+{
+    if (block == NULL || block->buf == NULL || block->len <= 0)
+	return NULL;
+
+    ndn_shared_block_t* shared =
+	(ndn_shared_block_t*)malloc(sizeof(ndn_shared_block_t));
+    if (shared == NULL) {
+	DEBUG("ndn: cannot allocate memory for shared block\n");
+	return NULL;
+    }
+
+    // "Move" memory into the shared block
+    shared->block.buf = block->buf;
+    shared->block.len = block->len;
+    block->buf = NULL;
+    block->len = 0;
+    atomic_set_to_one(&shared->ref);
+    return shared;
+}
+
 void ndn_shared_block_release(ndn_shared_block_t* shared)
 {
     assert(shared != NULL);
@@ -65,8 +86,9 @@ void ndn_shared_block_release(ndn_shared_block_t* shared)
 ndn_shared_block_t* ndn_shared_block_copy(ndn_shared_block_t* shared)
 {
     assert(shared != NULL);
-    int old_ref = atomic_inc(&shared->ref);
-    DEBUG("ndn: increase shared block ref to %d\n", old_ref + 1);
+    int ref = atomic_inc(&shared->ref) + 1;
+    DEBUG("ndn: increase shared block ref to %d\n", ref);
+    (void)ref;
     return shared;
 }
 

@@ -22,6 +22,8 @@
 
 #include "kernel_types.h"
 #include "net/ndn/shared_block.h"
+#include "net/ndn/encoding/block.h"
+#include "net/ndn/encoding/name.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,21 +65,19 @@ typedef int (*ndn_app_error_cb_t)(int error);
 typedef struct _consumer_cb_entry {
     struct _consumer_cb_entry *prev;
     struct _consumer_cb_entry *next;
-    ndn_block_t interest;               /**< expressed interest */
+    ndn_block_t pi;                     /**< expressed interest */
     ndn_app_data_cb_t  on_data;         /**< handler for the on_data event */
     ndn_app_timeout_cb_t  on_timeout;   /**< handler for the on_timeout event */
-    ndn_app_error_cb_t on_error;        /**< handler for error */
 } _consumer_cb_entry_t;
 
 /**
  * @brief  Type for the producer callback table entry.
  */
 typedef struct _producer_cb_entry {
-    struct _consumer_cb_entry *prev;
-    struct _consumer_cb_entry *next;
+    struct _producer_cb_entry *prev;
+    struct _producer_cb_entry *next;
     ndn_block_t prefix;                 /**< registered prefix */
     ndn_app_interest_cb_t  on_data;     /**< handler for the on_interest event */
-    ndn_app_error_cb_t  on_error;       /**< handler for error */
 } _producer_cb_entry_t;
 
 
@@ -86,6 +86,7 @@ typedef struct _producer_cb_entry {
 
 /**
  * @brief   Type to represent an NDN app handle and its associated context.
+ *
  * @details This struct is not lock-protected and should only be accessed from
  *          a single thread.
  */
@@ -98,6 +99,7 @@ typedef struct ndn_app {
 
 /**
  * @brief   Creates a handle for an NDN app and initialize the context.
+ *
  * @details This function is reentrant and can be called from multiple threads.
  *
  * @return  Pointer to the newly created @ref ndn_app_t struct, if success.
@@ -107,6 +109,7 @@ ndn_app_t* ndn_app_create(void);
 
 /**
  * @brief   Runs the event loop with the app handle.
+ *
  * @details This function is reentrant and can be called from multiple threads.
  *          However, the same handle cannot be used twice by this function at the
  *          same time.
@@ -121,6 +124,27 @@ int ndn_app_run(ndn_app_t* handle);
  * @brief   Releases the app handle and all associated memory.
  */
 void ndn_app_destroy(ndn_app_t* handle);
+
+/**
+ * @brief   Sends an interest with specified name, selectors, lifetime and callbacks.
+ *
+ * @details This function is reentrant and can be called from multiple threads.
+ *
+ * @param[in]  handle     Handler of the app that calls this function.
+ * @param[in]  name       Name of the Interest.
+ * @param[in]  selectors  Selectors of the Interest. Can be NULL if omitted.
+ * @param[in]  lifetime   Lifetime of the Interest.
+ * @param[in]  on_data    Data handler. Can be NULL.
+ * @param[in]  on_timeout Timeout handler. Can be NULL.
+ *
+ * @return  0, if success.
+ * @return  -1, if @p handle or @p name is NULL.
+ * @return  -1, if out of memory when allocating memory for pending interest.
+ */
+int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
+			     void* selectors, uint32_t lifetime,
+			     ndn_app_data_cb_t on_data,
+			     ndn_app_timeout_cb_t on_timeout);
 
 #ifdef __cplusplus
 }
