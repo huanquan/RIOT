@@ -145,7 +145,6 @@ int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len);
  */
 int ndn_name_get_size_from_block(ndn_block_t* block);
 
-
 /**
  * @brief   Gets the n-th name component from a TLV-encoded NDN name.
  *
@@ -163,6 +162,22 @@ int ndn_name_get_size_from_block(ndn_block_t* block);
  * @return  -1, if @p pos >= the total number of name components.
  */
 int ndn_name_get_component_from_block(ndn_block_t* block, int pos, ndn_name_component_t* comp);
+
+/**
+ * @brief   Compares two TLV-encoded names based on the canonical order.
+ *
+ * @param[in]  lhs    Left-hand-side name.
+ * @param[in]  rhs    Right-hand-side name.
+ *
+ * @return  0, if @p lhs == @p rhs.
+ * @return  1, if @p lhs > @p rhs and @p rhs is not a prefix of @p lhs.
+ * @return  2, if @p lhs > @p rhs and @p rhs is a proper prefix of @p lhs.
+ * @return  -1, if @p lhs < @p rhs and @p lhs is not a prefix of @p rhs.
+ * @return  -2, if @p lhs < @p rhs and @p lhs is a proper prefix of @p rhs.
+ * @return  3, if @p lhs is NULL or invalid.
+ * @return  -3, if @p rhs is NULL or invalid.
+ */
+int ndn_name_compare_block(ndn_block_t* lhs, ndn_block_t* rhs);
 
 #ifdef __cplusplus
 }

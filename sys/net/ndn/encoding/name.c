@@ -243,4 +243,60 @@ int ndn_name_get_component_from_block(ndn_block_t* block, int pos, ndn_name_comp
     return -1;
 }
 
+int ndn_name_compare_block(ndn_block_t* lhs, ndn_block_t* rhs)
+{
+    if (lhs == NULL || lhs->buf == NULL || lhs->len <= 0) return 3;
+    if (rhs == NULL || rhs->buf == NULL || rhs->len <= 0) return -3;
+
+    const uint8_t* lbuf = lhs->buf;
+    const uint8_t* rbuf = rhs->buf;
+    int llen = lhs->len;
+    int rlen = rhs->len;
+    uint32_t num;
+    int l;
+
+    /* check left name type */
+    l = ndn_block_get_var_number(lbuf, llen, &num);
+    if (l < 0) return 3;
+    if (num != NDN_TLV_NAME) return 3;
+    lbuf += l;
+    llen -= l;
+
+    /* check right name type */
+    l = ndn_block_get_var_number(rbuf, rlen, &num);
+    if (l < 0) return -3;
+    if (num != NDN_TLV_NAME) return -3;
+    rbuf += l;
+    rlen -= l;
+
+    /* read left name length */
+    l = ndn_block_get_var_number(lbuf, llen, &num);
+    if (l < 0) return 3;
+    lbuf += l;
+    llen -= l;
+
+    if ((int)num > llen)  // name is incomplete
+	return 3;
+    llen = (int)num;
+
+    /* read right name length */
+    l = ndn_block_get_var_number(rbuf, rlen, &num);
+    if (l < 0) return -3;
+    rbuf += l;
+    rlen -= l;
+
+    if ((int)num > rlen)  // name is incomplete
+	return -3;
+    rlen = (int)num;
+
+    int r = memcmp(lbuf, rbuf, llen < rlen ? llen : rlen);
+    if (r < 0) return -1;
+    else if (r > 0) return 1;
+    else {
+	if (llen < rlen) return -2;
+	else if (llen > rlen) return 2;
+	else return 0;
+    }
+}
+
 /** @} */
