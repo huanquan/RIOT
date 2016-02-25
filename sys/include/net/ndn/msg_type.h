@@ -27,6 +27,15 @@ extern "C" {
 
 #define NDN_APP_MSG_TYPE_TIMEOUT    (0x0301)
 
+#define NDN_APP_MSG_TYPE_DATA       (0x0302)
+
+#define NDN_APP_MSG_TYPE_INTEREST   (0x0303)
+
+#define NDN_APP_MSG_TYPE_ADD_FACE   (0x0304)
+
+#define NDN_APP_MSG_TYPE_REMOVE_FACE   (0x0305)
+
+
 #ifdef __cplusplus
 }
 #endif

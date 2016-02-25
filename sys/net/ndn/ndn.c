@@ -24,6 +24,8 @@
 #include "net/ndn/netif.h"
 #include "net/ndn/pit.h"
 #include "net/ndn/encoding/interest.h"
+#include "net/ndn/msg_type.h"
+
 #include "net/ndn/ndn.h"
 
 #define ENABLE_DEBUG (1)
@@ -82,7 +84,6 @@ static void *_event_loop(void *args)
     gnrc_netreg_register(GNRC_NETTYPE_NDN, &me_reg);
 
     /* preinitialize ACK to GET/SET commands*/
-    reply.content.value = -ENOTSUP;
     reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
 
     /* start event loop */
@@ -96,6 +97,31 @@ static void *_event_loop(void *args)
 		      msg.sender_pid);
 		ndn_pit_timeout((msg_t*)msg.content.ptr);
 		break;
+
+	    case NDN_APP_MSG_TYPE_ADD_FACE:
+		DEBUG("ndn: ADD_FACE message received from pid %" PRIkernel_pid "\n",
+		      msg.sender_pid);;
+		if (ndn_face_table_add((kernel_pid_t)msg.content.value, NDN_FACE_APP) != 0) {
+		    DEBUG("ndn: failed to add face id %u\n", msg.content.value);
+		    reply.content.value = 1;
+		} else {
+		    reply.content.value = 0;  // indicate success
+		}
+		msg_reply(&msg, &reply);
+		break;
+
+	    case NDN_APP_MSG_TYPE_REMOVE_FACE:
+		DEBUG("ndn: REMOVE_FACE message received from pid %" PRIkernel_pid "\n",
+		      msg.sender_pid);;
+		if (ndn_face_table_remove((kernel_pid_t)msg.content.value) != 0) {
+		    DEBUG("ndn: failed to remove face id %u\n", msg.content.value);
+		    reply.content.value = 1;
+		} else {
+		    reply.content.value = 0;  // indicate success
+		}
+		msg_reply(&msg, &reply);
+		break;
+
             case GNRC_NETAPI_MSG_TYPE_RCV:
                 DEBUG("ndn: RCV message received from pid %" PRIkernel_pid "\n",
 		      msg.sender_pid);
@@ -111,6 +137,7 @@ static void *_event_loop(void *args)
 
             case GNRC_NETAPI_MSG_TYPE_GET:
             case GNRC_NETAPI_MSG_TYPE_SET:
+		reply.content.value = -ENOTSUP;
                 msg_reply(&msg, &reply);
                 break;
             default:

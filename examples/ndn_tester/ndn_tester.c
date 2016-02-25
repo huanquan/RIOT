@@ -48,6 +48,9 @@ static int on_timeout(ndn_block_t* interest)
 
 static void run_consumer(void)
 {
+    printf("consumer: start (pid=%" PRIkernel_pid ")\n",
+	   thread_getpid());
+
     ndn_app_t *handle = ndn_app_create();
     if (handle == NULL) {
 	printf("consumer: cannot create app handle (pid=%"
