@@ -27,6 +27,7 @@
 #include "net/ndn/shared_block.h"
 #include "net/ndn/encoding/interest.h"
 #include "net/ndn/msg_type.h"
+#include "net/ndn/ndn.h"
 
 #include "net/ndn/app.h"
 
@@ -35,6 +36,12 @@
 
 ndn_app_t* ndn_app_create(void)
 {
+    if (ndn_pid == KERNEL_PID_UNDEF) {
+	DEBUG("ndn_app: ndn thread not initialized (pid=%"
+	      PRIkernel_pid ")\n", thread_getpid());
+	return NULL;
+    }
+
     ndn_app_t *handle = (ndn_app_t*)malloc(sizeof(ndn_app_t));
     if (handle == NULL) {
 	DEBUG("ndn_app: cannot alloacte memory for app handle (pid=%"
@@ -46,13 +53,24 @@ ndn_app_t* ndn_app_create(void)
     handle->_ccb_table = NULL;
     handle->_pcb_table = NULL;
 
+    // add face id to face table
+    msg_t add_face, reply;
+    add_face.type = NDN_APP_MSG_TYPE_ADD_FACE;
+    add_face.content.value = (uint32_t)handle->id;
+    reply.content.value = 1;
+    msg_send_receive(&add_face, &reply, ndn_pid);
+    if (reply.content.value != 0) {
+	DEBUG("ndn_app: cannot add app face (pid=%" PRIkernel_pid ")\n", handle->id);
+	free(handle);
+	return NULL;
+    }
+
+    // init msg queue to receive message
     if (msg_init_queue(handle->_msg_queue, NDN_APP_MSG_QUEUE_SIZE) != 0) {
 	DEBUG("ndn_app: cannot init msg queue (pid=%" PRIkernel_pid ")\n", handle->id);
 	free(handle);
 	return NULL;
     }
-
-    //TODO: add face id to face table
 
     return handle;
 }
@@ -204,6 +222,18 @@ void ndn_app_destroy(ndn_app_t* handle)
 {
     _release_consumer_cb_table(handle);
     _release_producer_cb_table(handle);
+
+    // remove face id to face table
+    msg_t add_face, reply;
+    add_face.type = NDN_APP_MSG_TYPE_REMOVE_FACE;
+    add_face.content.value = (uint32_t)handle->id;
+    reply.content.value = 1;
+    msg_send_receive(&add_face, &reply, ndn_pid);
+    if (reply.content.value != 0) {
+	DEBUG("ndn_app: error removing app face (pid=%" PRIkernel_pid ")\n", handle->id);
+	// ignore the error anyway...
+    }
+
     //TODO: clear msg queue
     free(handle);
 }

@@ -58,6 +58,7 @@ int ndn_face_table_add(kernel_pid_t id, int type)
     entry->id = id;
     entry->type = type;
     DL_PREPEND(_face_table, entry);
+    DEBUG("ndn: add face entry (id=%" PRIkernel_pid ", type=%d)\n", id, type);
     return 0;
 }
 
@@ -68,6 +69,8 @@ int ndn_face_table_remove(kernel_pid_t id)
 	if (entry->id == id) {
 	    DL_DELETE(_face_table, entry);
 	    free(entry);
+	    DEBUG("ndn: remove face entry (id=%" PRIkernel_pid ", type=%d)\n",
+		  entry->id, entry->type);
 	    return 0;
 	}
     }
