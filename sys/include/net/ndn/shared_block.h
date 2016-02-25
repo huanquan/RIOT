@@ -36,7 +36,7 @@ typedef struct ndn_shared_block {
 } ndn_shared_block_t;
 
 /**
- * @brief    Creates a shared block.
+ * @brief    Creates a shared block by copying.
  * @details  This function copies the caller-supplied block to a
  *           newly allocated buffer.
  *
@@ -47,6 +47,20 @@ typedef struct ndn_shared_block {
  * @return   NULL, if out of memory.
  */
 ndn_shared_block_t* ndn_shared_block_create(ndn_block_t* block);
+
+/**
+ * @brief    Creates a shared block using move semantics.
+ * @details  This function moves the caller-supplied block into the new
+ *           shared block. The pointer in the original block is set to
+ *           NULL.
+ *
+ * @param[in]  block  Block to be shared.
+ *
+ * @return   Shared block pointer, if success.
+ * @return   NULL, if @p block is NULL or invalid.
+ * @return   NULL, if out of memory.
+ */
+ndn_shared_block_t* ndn_shared_block_create_by_move(ndn_block_t* block);
 
 /**
  * @brief    Release a shared block pointer.

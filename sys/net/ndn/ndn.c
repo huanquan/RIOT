@@ -87,7 +87,7 @@ static void *_event_loop(void *args)
 
     /* start event loop */
     while (1) {
-        DEBUG("ndn: waiting for incoming message.\n");
+        DEBUG("ndn: waiting for incoming message\n");
         msg_receive(&msg);
 
         switch (msg.type) {

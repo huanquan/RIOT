@@ -513,10 +513,12 @@ static void test_ndn_interest_create__invalid(void)
     ndn_name_t bad2 = { 1, comps + 2 };
     ndn_name_t bad3 = { 1, comps + 3 };
 
-    TEST_ASSERT_NULL(ndn_interest_create(NULL, NULL, 4000));
-    TEST_ASSERT_NULL(ndn_interest_create(&bad1, NULL, 4000));
-    TEST_ASSERT_NULL(ndn_interest_create(&bad2, NULL, 4000));
-    TEST_ASSERT_NULL(ndn_interest_create(&bad3, NULL, 4000));
+    ndn_block_t block;
+
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_create(NULL, NULL, 4000, NULL));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_create(&bad1, NULL, 4000, &block));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_create(&bad2, NULL, 4000, &block));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_create(&bad3, NULL, 4000, &block));
 }
 
 static void test_ndn_interest_create__valid(void)
@@ -543,10 +545,36 @@ static void test_ndn_interest_create__valid(void)
     	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
     };
 
-    gnrc_pktsnip_t* pkt = ndn_interest_create(&name, NULL, lifetime);
+    ndn_block_t block;
+    TEST_ASSERT_EQUAL_INT(0, ndn_interest_create(&name, NULL, lifetime, &block));
+    TEST_ASSERT_NOT_NULL(block.buf);
+    TEST_ASSERT_EQUAL_INT(sizeof(result), block.len);
+    TEST_ASSERT(0 == memcmp(block.buf, result, 20));
+    TEST_ASSERT(0 == memcmp(block.buf + 24, result + 24, 4));
+}
+
+static void test_ndn_interest_create_packet__valid(void)
+{
+    uint8_t result[] = {
+	NDN_TLV_INTEREST, 26,
+	NDN_TLV_NAME, 14,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
+    	NDN_TLV_NONCE, 4,
+    	0, 0, 0, 0, /* random values that we don't care */
+    	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
+    };
+    ndn_block_t block;
+    block.buf = result;
+    block.len = sizeof(result);
+
+    gnrc_pktsnip_t* pkt = ndn_interest_create_packet(&block);
     TEST_ASSERT_NOT_NULL(pkt);
-    TEST_ASSERT_EQUAL_INT(sizeof(result), pkt->size);
     TEST_ASSERT_NULL(pkt->next);
+    TEST_ASSERT_EQUAL_INT(GNRC_NETTYPE_NDN, pkt->type);
+    TEST_ASSERT_EQUAL_INT(sizeof(result), pkt->size);
     TEST_ASSERT_EQUAL_INT(sizeof(result), gnrc_pkt_len(pkt));
 
     TEST_ASSERT(0 == memcmp((uint8_t*)pkt->data, result, 20));
@@ -554,6 +582,7 @@ static void test_ndn_interest_create__valid(void)
 
     gnrc_pktbuf_release(pkt);
 }
+
 
 static void test_ndn_interest_get_block__invalid(void)
 {
@@ -675,6 +704,7 @@ Test *tests_ndn_encoding_interest_tests(void)
     EMB_UNIT_TESTFIXTURES(fixtures) {
         new_TestFixture(test_ndn_interest_create__invalid),
 	new_TestFixture(test_ndn_interest_create__valid),
+	new_TestFixture(test_ndn_interest_create_packet__valid),
 	new_TestFixture(test_ndn_interest_get_block__invalid),
 	new_TestFixture(test_ndn_interest_get_block__valid),
 	new_TestFixture(test_ndn_interest_get_name__invalid),

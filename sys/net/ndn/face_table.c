@@ -67,7 +67,7 @@ int ndn_face_table_remove(kernel_pid_t id)
     DL_FOREACH_SAFE(_face_table, entry, tmp) {
 	if (entry->id == id) {
 	    DL_DELETE(_face_table, entry);
-	    free((void*)entry);
+	    free(entry);
 	    return 0;
 	}
     }
