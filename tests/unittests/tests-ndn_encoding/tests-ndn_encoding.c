@@ -472,6 +472,51 @@ static void test_ndn_name_get_component_from_block__all(void)
     TEST_ASSERT_EQUAL_INT('h', comp.buf[0]);
 }
 
+static void test_ndn_name_compare_block__valid(void)
+{
+    uint8_t buf1[] = {
+	NDN_TLV_NAME, 9,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+    };
+    ndn_block_t name0 = { buf1, sizeof(buf1) }; // URI = /a/b/c
+    ndn_block_t name1 = { buf1, sizeof(buf1) }; // URI = /a/b/c
+
+    uint8_t buf2[] = {
+	NDN_TLV_NAME, 9,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'd',
+    };
+    ndn_block_t name2 = { buf2, sizeof(buf2) }; // URI = /a/b/d
+
+    uint8_t buf3[] = {
+	NDN_TLV_NAME, 10,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'c',
+    };
+    ndn_block_t name3 = { buf3, sizeof(buf3) }; // URI = /a/b/cc
+
+    uint8_t buf4[] = {
+	NDN_TLV_NAME, 12,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 1, 'd',
+    };
+    ndn_block_t name4 = { buf4, sizeof(buf4) }; // URI = /a/b/c/d
+
+    TEST_ASSERT_EQUAL_INT(0, ndn_name_compare_block(&name0, &name1));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_compare_block(&name1, &name2));
+    TEST_ASSERT_EQUAL_INT(-2, ndn_name_compare_block(&name1, &name4));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_compare_block(&name2, &name3));
+    TEST_ASSERT_EQUAL_INT(1, ndn_name_compare_block(&name3, &name4));
+    TEST_ASSERT_EQUAL_INT(1, ndn_name_compare_block(&name2, &name4));
+    TEST_ASSERT_EQUAL_INT(2, ndn_name_compare_block(&name4, &name1));
+}
+
 Test *tests_ndn_encoding_name_tests(void)
 {
     EMB_UNIT_TESTFIXTURES(fixtures) {
@@ -490,6 +535,7 @@ Test *tests_ndn_encoding_name_tests(void)
         new_TestFixture(test_ndn_name_get_size_from_block__invalid),
 	new_TestFixture(test_ndn_name_get_size_from_block__valid),
         new_TestFixture(test_ndn_name_get_component_from_block__all),
+	new_TestFixture(test_ndn_name_compare_block__valid),
     };
 
     EMB_UNIT_TESTCALLER(ndn_encoding_name_tests, NULL, NULL, fixtures);
