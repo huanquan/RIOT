@@ -13,7 +13,7 @@
  * @{
  *
  * @file
- * @brief   NDN PIT implementation. Mostly a wrapper around utlist.
+ * @brief   NDN PIT implementation.
  *
  * @author  Wentao Shang <wentaoshang@gmail.com>
  */
@@ -23,15 +23,11 @@
 #include "kernel_types.h"
 #include "xtimer.h"
 #include "net/ndn/shared_block.h"
+#include "net/ndn/face_table.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct _face_list_entry {
-    kernel_pid_t id;  /**< ID of the incoming face */
-    int type;         /**< type of the incoming face */
-} _face_list_entry_t;
 
 /**
  * @brief  Type to represent the PIT entry.

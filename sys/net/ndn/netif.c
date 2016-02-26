@@ -20,8 +20,9 @@
 #include "net/gnrc/netif.h"
 #include "net/gnrc/netif/hdr.h"
 #include "net/gnrc/netreg.h"
-
 #include "net/ndn/face_table.h"
+#include "net/ndn/fib.h"
+
 #include "net/ndn/netif.h"
 
 #define ENABLE_DEBUG (1)
@@ -51,21 +52,33 @@ void ndn_netif_auto_add(void)
 	/* get device type */
 	if ((gnrc_netapi_get(iface, NETOPT_DEVICE_TYPE, 0, &_netif_table[i].dev_type,
 			     sizeof(uint16_t)) < 0)) {
-	    DEBUG("ndn: cannot get device type (pid=%u)\n", (uint32_t)iface);
+	    DEBUG("ndn: cannot get device type (pid=%" PRIkernel_pid ")\n", iface);
 	    continue;
 	}
 
 	/* get device mtu */
 	if ((gnrc_netapi_get(iface, NETOPT_MAX_PACKET_SIZE, 0, &_netif_table[i].mtu,
 			     sizeof(uint16_t)) < 0)) {
-	    DEBUG("ndn: cannot get device mtu (pid=%u)\n", (uint32_t)iface);
+	    DEBUG("ndn: cannot get device mtu (pid=%" PRIkernel_pid ")\n", iface);
 	    continue;
 	}
 	
 	if (_netif_table[i].dev_type == NETDEV2_TYPE_ETHERNET) {
 	    _netif_table[i].iface = iface;
-	    ndn_face_table_add(iface, NDN_FACE_ETH);
-	    DEBUG("ndn: add ethernet device (pid=%u) into face table\n", (uint32_t)iface);
+	    if (ndn_face_table_add(iface, NDN_FACE_ETH) == 0) {
+		DEBUG("ndn: add ethernet device (pid=%"
+		      PRIkernel_pid ") into face table\n", iface);
+		// add default route for this face
+		uint8_t buf[] = { NDN_TLV_NAME, 0 };
+		ndn_block_t empty = { buf, sizeof(buf) }; // URI = /
+		ndn_shared_block_t* shared = ndn_shared_block_create(&empty);
+		if (shared != NULL
+		    && ndn_fib_add(shared, iface, NDN_FACE_ETH) == 0)
+		    DEBUG("ndn: default route added for ethernet device\n");
+	    }
+	    else
+		DEBUG("ndn: failed to add ethernet device (pid=%"
+		      PRIkernel_pid ") into face table\n", iface);
 	} /* ignore other types of devices for now */
     }
 }
@@ -89,14 +102,14 @@ int ndn_netif_send(kernel_pid_t iface, gnrc_pktsnip_t* pkt)
 
     ndn_netif_t* netif = _ndn_netif_find(iface);
     if (netif == NULL) {
-	DEBUG("ndn: no such network device (iface=%u)", (uint32_t)iface);
+	DEBUG("ndn: no such network device (iface=%" PRIkernel_pid ")", iface);
 	return -1;
     }
 
     /* check mtu */
     if (gnrc_pkt_len(pkt->next) > netif->mtu) {
-	DEBUG("ndn: packet size (%u) exceeds device mtu (iface=%u)\n",
-	      gnrc_pkt_len(pkt->next), (uint32_t)iface);
+	DEBUG("ndn: packet size (%u) exceeds device mtu (iface=%" PRIkernel_pid ")\n",
+	      gnrc_pkt_len(pkt->next), iface);
 	gnrc_pktbuf_release(pkt);
 	return -1;
     }
@@ -119,12 +132,12 @@ int ndn_netif_send(kernel_pid_t iface, gnrc_pktsnip_t* pkt)
 
     /* send to interface */
     if (gnrc_netapi_send(iface, pkt) < 1) {
-        DEBUG("ndn: failed to send packet (iface=%u)\n", (uint32_t)iface);
+        DEBUG("ndn: failed to send packet (iface=%" PRIkernel_pid ")\n", iface);
         gnrc_pktbuf_release(pkt);
 	return -1;
     }
 
-    DEBUG("ndn: successfully sent packet (iface=%u)\n", (uint32_t)iface);
+    DEBUG("ndn: successfully sent packet (iface=%" PRIkernel_pid ")\n", iface);
     return 0;
 }
 

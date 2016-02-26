@@ -27,6 +27,13 @@
 extern "C" {
 #endif
 
+
+typedef struct _face_list_entry {
+    kernel_pid_t id;  /**< ID of the incoming face */
+    int type;         /**< type of the incoming face */
+} _face_list_entry_t;
+
+
 /**
  * @brief Type to represent a Face entry.
  */

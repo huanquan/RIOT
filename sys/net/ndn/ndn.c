@@ -23,6 +23,7 @@
 #include "net/ndn/face_table.h"
 #include "net/ndn/netif.h"
 #include "net/ndn/pit.h"
+#include "net/ndn/fib.h"
 #include "net/ndn/encoding/interest.h"
 #include "net/ndn/msg_type.h"
 
@@ -56,6 +57,7 @@ static void *_event_loop(void *args);
 kernel_pid_t ndn_init(void)
 {
     ndn_face_table_init();
+    ndn_fib_init();
     ndn_netif_auto_add();
 
     ndn_pit_init();
@@ -210,19 +212,28 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
     /* set (or reset) the timer */
     _set_timeout(pit_entry, lifetime);
 
-    /* get list of interfaces */
-    kernel_pid_t ifs[GNRC_NETIF_NUMOF];
-    size_t ifnum = gnrc_netif_get(ifs);
-
-    /* throw away packet if no one is interested */
-    if (ifnum == 0) {
-	DEBUG("ndn: no interfaces registered, dropping packet\n");
+    /* check fib */
+    ndn_block_t name;
+    if (ndn_interest_get_name(&block, &name) < 0) {
+	DEBUG("ndn: cannot get name from interest block\n");
 	gnrc_pktbuf_release(pkt);
 	return;
     }
 
+    ndn_fib_entry_t* fib_entry = ndn_fib_lookup(&name);
+    if (fib_entry == NULL) {
+	DEBUG("ndn: no route for interest name, drop packet\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }
+    DEBUG("ndn: found matching fib\n");
+
+    assert(fib_entry->face_list_size > 0);
+    assert(fib_entry->face_list != NULL);
+
     /* send to the first available interface */
-    kernel_pid_t iface = ifs[0];
+    kernel_pid_t iface = fib_entry->face_list[0].id;
+    DEBUG("ndn: send to face %" PRIkernel_pid "\n", iface);
     ndn_netif_send(iface, pkt);
     return;
 }
