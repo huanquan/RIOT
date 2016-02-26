@@ -24,7 +24,7 @@ int ndn_block_get_var_number(const uint8_t* buf, int len, uint32_t* num)
     if (buf == NULL || len <= 0 || num == NULL) return -1;
 
     uint8_t val = buf[0];
-    if (val > 0 && val < 253) {
+    if (val < 253) {
 	*num = val;
 	return 1;
     } else if (val == 253 && len >= 3) {
