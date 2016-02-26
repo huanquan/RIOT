@@ -44,8 +44,13 @@ int ndn_name_component_compare(ndn_name_component_t* lhs, ndn_name_component_t* 
 
 int ndn_name_component_wire_encode(ndn_name_component_t* comp, uint8_t* buf, int len)
 {
-    if (comp == NULL || buf == NULL) return -1;
-    if (comp->buf == NULL || comp->len <= 0) return -1;
+    if (comp == NULL || buf == NULL || comp->len < 0) return -1;
+
+    if (comp->buf == NULL) {
+	// empty component
+	if (comp->len != 0) return -1;
+	else return 0;
+    }
 
     int tl = ndn_block_total_length(NDN_TLV_NAME_COMPONENT, comp->len);
     if (tl > len) return -1;
@@ -90,7 +95,11 @@ int ndn_name_get_component(ndn_name_t* name, int pos, ndn_name_component_t* comp
 static int _ndn_name_length(ndn_name_t* name)
 {
     if (name == NULL) return -1;
-    if (name->comps == NULL) return 0;
+    if (name->comps == NULL) {
+	if (name->size != 0) return -1;
+	else return 0;
+    }
+
     int res = 0;
     for (int i = 0; i < name->size; ++i)
     {
@@ -104,9 +113,8 @@ static int _ndn_name_length(ndn_name_t* name)
 int ndn_name_total_length(ndn_name_t* name)
 {
     int cl = _ndn_name_length(name);
-    if (cl <= 0) return cl;
-    int tl = ndn_block_total_length(NDN_TLV_NAME, cl);
-    return tl;
+    if (cl < 0) return cl;
+    return ndn_block_total_length(NDN_TLV_NAME, cl);
 }
 
 int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len)
@@ -114,7 +122,7 @@ int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len)
     if (name == NULL || buf == NULL) return -1;
 
     int cl = _ndn_name_length(name);
-    if (cl <= 0) return cl;
+    if (cl < 0) return cl;
     int tl = ndn_block_total_length(NDN_TLV_NAME, cl);
     if (tl > len) return -1;
 

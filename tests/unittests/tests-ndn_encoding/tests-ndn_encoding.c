@@ -97,6 +97,7 @@ static void test_ndn_block_var_number_length__all(void)
 static void test_ndn_block_total_length__all(void)
 {
     TEST_ASSERT_EQUAL_INT(4, ndn_block_total_length(1, 2));
+    TEST_ASSERT_EQUAL_INT(2, ndn_block_total_length(1, 0));
 }
 
 static void test_ndn_block_integer_length__all(void)
@@ -182,7 +183,9 @@ static void test_ndn_name_component_compare__valid(void)
     TEST_ASSERT_EQUAL_INT( 1, ndn_name_component_compare(&comp2, &comp1));
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_component_compare(&comp3, &comp2));
     TEST_ASSERT_EQUAL_INT( 0, ndn_name_component_compare(&comp3, &comp4));
-    TEST_ASSERT_EQUAL_INT( 1, ndn_name_component_compare(&comp3, &comp0));
+    TEST_ASSERT_EQUAL_INT( 1, ndn_name_component_compare(&comp1, &comp0));
+    TEST_ASSERT_EQUAL_INT( 0, ndn_name_component_compare(&comp0, &comp0));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_component_compare(&comp0, &comp1));
 }
 
 static void test_ndn_name_component_wire_encode__invalid(void)
@@ -207,6 +210,9 @@ static void test_ndn_name_component_wire_encode__valid(void)
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_component_wire_encode(&comp, dst, sizeof(dst) - 1));
     TEST_ASSERT_EQUAL_INT(sizeof(result), ndn_name_component_wire_encode(&comp, dst, sizeof(dst)));
     TEST_ASSERT_EQUAL_INT(0, memcmp(result, dst, sizeof(dst)));
+
+    ndn_name_component_t empty = { NULL, 0 };
+    TEST_ASSERT_EQUAL_INT(0, ndn_name_component_wire_encode(&empty, dst, sizeof(dst)));
 }
 
 static void test_ndn_name_compare__invalid(void)
@@ -258,9 +264,13 @@ static void test_ndn_name_compare__valid(void)
 	{ buf + 3, 1 },
     };
     ndn_name_t name5 = { 3, comps4 };  // URI = /a/b/d
+    ndn_name_t empty = { 0, NULL };
 
-    // name3 < name1 = name4 < name2 < name5
-    
+    // empty < name3 < name1 = name4 < name2 < name5
+
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_compare(&empty, &name3));
+    TEST_ASSERT_EQUAL_INT(1, ndn_name_compare(&name3, &empty));
+
     TEST_ASSERT_EQUAL_INT(0, ndn_name_compare(&name1, &name4));
 
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_compare(&name1, &name2));
@@ -284,7 +294,9 @@ static void test_ndn_name_get_component__invalid(void)
     };
     ndn_name_t name1 = { 4, comps1 };  // URI = /a/b/c/d
     ndn_name_component_t dst;
+    ndn_name_t empty = { 0, NULL };
 
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_get_component(&empty, 0, &dst));
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_get_component(NULL, 0, NULL));
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_get_component(NULL, 0, &dst));
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_get_component(&name1, 0, NULL));
@@ -348,8 +360,10 @@ static void test_ndn_name_total_length__valid(void)
 	{ buf + 4, 2 }
     };
     ndn_name_t name1 = { 4, comps1 };  // URI = /a/b/cd/ef
+    ndn_name_t empty = { 0, NULL };
 
     TEST_ASSERT_EQUAL_INT(16, ndn_name_total_length(&name1));
+    TEST_ASSERT_EQUAL_INT(2, ndn_name_total_length(&empty));
 }
 
 static void test_ndn_name_wire_encode__invalid(void)
@@ -387,15 +401,21 @@ static void test_ndn_name_wire_encode__valid(void)
     ndn_name_t name1 = { 4, comps1 };  // URI = /a/b/cd/ef
     uint8_t dst[16];
     memset(dst, 0, sizeof(dst));
-    uint8_t result[16] = {NDN_TLV_NAME, 14,
-			  NDN_TLV_NAME_COMPONENT, 1, 'a',
-			  NDN_TLV_NAME_COMPONENT, 1, 'b',
-			  NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
-			  NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
+    uint8_t result[16] = {
+	NDN_TLV_NAME, 14,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
     };
 
     TEST_ASSERT_EQUAL_INT(sizeof(result), ndn_name_wire_encode(&name1, dst, sizeof(dst)));
-    TEST_ASSERT(0 == memcmp(result, dst, sizeof(dst)));
+    TEST_ASSERT(0 == memcmp(result, dst, sizeof(result)));
+
+    ndn_name_t empty = { 0, NULL };
+    uint8_t em_res[] = { NDN_TLV_NAME, 0, };
+    TEST_ASSERT_EQUAL_INT(sizeof(em_res), ndn_name_wire_encode(&empty, dst, sizeof(dst)));
+    TEST_ASSERT(0 == memcmp(em_res, dst, sizeof(em_res)));
 }
 
 static void test_ndn_name_get_size_from_block__invalid(void)
@@ -428,10 +448,20 @@ static void test_ndn_name_get_size_from_block__valid(void)
     };
     ndn_block_t block = { buf, sizeof(buf) };
     TEST_ASSERT_EQUAL_INT(5, ndn_name_get_size_from_block(&block));
+
+    uint8_t em[] = { NDN_TLV_NAME, 0, };
+    ndn_block_t empty = { em, sizeof(em) };
+    TEST_ASSERT_EQUAL_INT(0, ndn_name_get_size_from_block(&empty));
 }
 
 static void test_ndn_name_get_component_from_block__all(void)
 {
+    ndn_name_component_t comp;
+
+    uint8_t em[] = { NDN_TLV_NAME, 0, };
+    ndn_block_t empty = { em, sizeof(em) };
+    TEST_ASSERT_EQUAL_INT(-1, ndn_name_get_component_from_block(&empty, 0, &comp));
+
     uint8_t buf[] = {
 	NDN_TLV_NAME, 18,
 	NDN_TLV_NAME_COMPONENT, 1, 'a',
@@ -441,7 +471,6 @@ static void test_ndn_name_get_component_from_block__all(void)
 	NDN_TLV_NAME_COMPONENT, 1, 'h',
     };
     ndn_block_t block = { buf, sizeof(buf) };
-    ndn_name_component_t comp;
 
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_get_component_from_block(&block, -1, &comp));
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_get_component_from_block(NULL, 0, &comp));
@@ -508,6 +537,12 @@ static void test_ndn_name_compare_block__valid(void)
     };
     ndn_block_t name4 = { buf4, sizeof(buf4) }; // URI = /a/b/c/d
 
+    uint8_t em[] = { NDN_TLV_NAME, 0, };
+    ndn_block_t empty = { em, sizeof(em) };
+    TEST_ASSERT_EQUAL_INT(-2, ndn_name_compare_block(&empty, &name1));
+    TEST_ASSERT_EQUAL_INT(0, ndn_name_compare_block(&empty, &empty));
+    TEST_ASSERT_EQUAL_INT(2, ndn_name_compare_block(&name1, &empty));
+
     TEST_ASSERT_EQUAL_INT(0, ndn_name_compare_block(&name0, &name1));
     TEST_ASSERT_EQUAL_INT(-1, ndn_name_compare_block(&name1, &name2));
     TEST_ASSERT_EQUAL_INT(-2, ndn_name_compare_block(&name1, &name4));
@@ -522,7 +557,7 @@ Test *tests_ndn_encoding_name_tests(void)
     EMB_UNIT_TESTFIXTURES(fixtures) {
 	new_TestFixture(test_ndn_name_component_compare__invalid),
 	new_TestFixture(test_ndn_name_component_compare__valid),
-	new_TestFixture(test_ndn_name_component_wire_encode__invalid),
+        new_TestFixture(test_ndn_name_component_wire_encode__invalid),
 	new_TestFixture(test_ndn_name_component_wire_encode__valid),
         new_TestFixture(test_ndn_name_compare__invalid),
 	new_TestFixture(test_ndn_name_compare__valid),

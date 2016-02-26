@@ -58,6 +58,7 @@ int ndn_name_component_compare(ndn_name_component_t* lhs, ndn_name_component_t* 
  * @param[in]  len       Size of the buffer.
  *
  * @return  Number of bytes written to the buffer, if success.
+ * @return  0, if the component is empty.
  * @return  -1 if the buffer is not big enough to store the encoded name.
  * @return  -1 if @p comp is invalid.
  * @return  -1 if @p comp or @p buf is NULL or @p len <= 0.
