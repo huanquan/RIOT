@@ -27,15 +27,10 @@
 #include "net/ndn/ndn.h"
 #include "net/ndn/encoding/name.h"
 #include "net/ndn/encoding/interest.h"
-#include "net/gnrc/netapi.h"
-#include "net/gnrc/netreg.h"
-#include "net/gnrc/pktdump.h"
+#include "net/ndn/msg_type.h"
 #include "timex.h"
 #include "xtimer.h"
 
-static gnrc_netreg_entry_t server = {
-    NULL, GNRC_NETREG_DEMUX_CTX_ALL, KERNEL_PID_UNDEF
-};
 
 static int on_timeout(ndn_block_t* interest)
 {
@@ -55,6 +50,7 @@ static void run_consumer(void)
     if (handle == NULL) {
 	printf("consumer: cannot create app handle (pid=%"
 	       PRIkernel_pid ")\n", thread_getpid());
+	return;
     }
 
     /* build interest packet */
@@ -88,53 +84,107 @@ static void run_consumer(void)
     ndn_app_destroy(handle);
 }
 
-static void start_dump(void)
-{
-    /* check if producer is already running */
-    if (server.pid != KERNEL_PID_UNDEF) {
-        puts("Error: server already running\n");
-        return;
-    }
+static kernel_pid_t producer = KERNEL_PID_UNDEF;
 
-    /* start server (which means registering pktdump for the chosen port) */
-    server.pid = gnrc_pktdump_getpid();
-    gnrc_netreg_register(GNRC_NETTYPE_NDNAPP, &server);
-    puts("Success: started packet dump server");
+static int on_interest(ndn_block_t* interest)
+{
+    (void)interest;
+    printf("producer: interest callback received (pid=%"
+	   PRIkernel_pid ")\n", thread_getpid());
+    printf("producer: return to the app\n");
+    return NDN_APP_CONTINUE;
 }
 
-static void stop_dump(void)
+static void run_producer(void)
 {
-    /* check if server is running at all */
-    if (server.pid == KERNEL_PID_UNDEF) {
-        printf("Error: server was not running\n");
+    printf("producer: start (pid=%" PRIkernel_pid ")\n",
+	   thread_getpid());
+
+    ndn_app_t *handle = ndn_app_create();
+    if (handle == NULL) {
+	printf("producer: cannot create app handle (pid=%"
+	       PRIkernel_pid ")\n", thread_getpid());
+	return;
+    }
+
+    /* build interest packet */
+    uint8_t buf[] = "ab";
+    ndn_name_component_t comps[2] = {
+	{ buf, 1 },
+	{ buf + 1, 1 },
+    };
+    ndn_name_t prefix = { 2, comps };  // URI = /a/b
+
+    printf("producer: register prefix /a/b (pid=%"
+	   PRIkernel_pid ")\n", thread_getpid());
+    if (ndn_app_register_prefix(handle, &prefix, on_interest) != 0) {
+	printf("producer: failed to register prefix (pid=%"
+	       PRIkernel_pid ")\n", thread_getpid());
+	ndn_app_destroy(handle);
+	return;
+    }
+
+    printf("producer: enter app run loop (pid=%"
+	   PRIkernel_pid ")\n", thread_getpid());
+    ndn_app_run(handle);
+    printf("producer: returned from app run loop (pid=%"
+	   PRIkernel_pid ")\n", thread_getpid());
+    ndn_app_destroy(handle);
+    producer = KERNEL_PID_UNDEF;
+    return;
+}
+
+static void start_producer(void)
+{
+    /* check if producer is already running */
+    if (producer != KERNEL_PID_UNDEF) {
+        printf("producer: already running (pid=%"
+	       PRIkernel_pid "\n", producer);
         return;
     }
-    /* stop server */
-    gnrc_netreg_unregister(GNRC_NETTYPE_NDNAPP, &server);
-    server.pid = KERNEL_PID_UNDEF;
-    puts("Success: stopped packet dump server");
+
+    /* start producer */
+    producer = thread_getpid();
+    run_producer();
+}
+
+static void stop_producer(void)
+{
+    /* check if producer is running at all */
+    if (producer == KERNEL_PID_UNDEF) {
+        printf("producer: not running\n");
+        return;
+    }
+
+    // send signal to terminate app
+    msg_t stop;
+    stop.type = NDN_APP_MSG_TYPE_TERMINATE;
+    stop.content.value = 0;
+    msg_send(&stop, producer);
+    printf("producer: stop signal sent to pid %" PRIkernel_pid "\n",
+	   producer);
 }
 
 int ndn_test(int argc, char **argv)
 {
     if (argc < 2) {
-        printf("usage: %s [consumer|dump]\n", argv[0]);
+        printf("usage: %s [consumer|producer]\n", argv[0]);
         return 1;
     }
 
     if (strcmp(argv[1], "consumer") == 0) {
 	run_consumer();
     }
-    else if (strcmp(argv[1], "dump") == 0) {
+    else if (strcmp(argv[1], "producer") == 0) {
         if (argc < 3) {
-            printf("usage: %s dump [start|stop]\n", argv[0]);
+            printf("usage: %s producer [start|stop]\n", argv[0]);
             return 1;
         }
         if (strcmp(argv[2], "start") == 0) {
-            start_dump();
+            start_producer();
         }
         else if (strcmp(argv[2], "stop") == 0) {
-            stop_dump();
+            stop_producer();
         }
         else {
             puts("error: invalid command");

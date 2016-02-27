@@ -17,8 +17,6 @@ USEMODULE += gnrc_netif_default
 USEMODULE += auto_init_gnrc_netif
 # Add the NDN module
 USEMODULE += ndn
-# This application dumps received packets to STDIO using the pktdump module
-USEMODULE += gnrc_pktdump
 # Add also the shell, some shell commands
 USEMODULE += shell
 USEMODULE += shell_commands

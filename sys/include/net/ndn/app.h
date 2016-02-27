@@ -24,6 +24,7 @@
 #include "net/ndn/shared_block.h"
 #include "net/ndn/encoding/block.h"
 #include "net/ndn/encoding/name.h"
+#include "net/gnrc/pktbuf.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,8 +77,8 @@ typedef struct _consumer_cb_entry {
 typedef struct _producer_cb_entry {
     struct _producer_cb_entry *prev;
     struct _producer_cb_entry *next;
-    ndn_block_t prefix;                 /**< registered prefix */
-    ndn_app_interest_cb_t  on_data;     /**< handler for the on_interest event */
+    ndn_shared_block_t* prefix;          /**< registered prefix */
+    ndn_app_interest_cb_t  on_interest;  /**< handler for the on_interest event */
 } _producer_cb_entry_t;
 
 
@@ -145,6 +146,22 @@ int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
 			     void* selectors, uint32_t lifetime,
 			     ndn_app_data_cb_t on_data,
 			     ndn_app_timeout_cb_t on_timeout);
+
+/**
+ * @brief   Registers a prefix with specified callbacks.
+ *
+ * @details This function is reentrant and can be called from multiple threads.
+ *
+ * @param[in]  handle     Handler of the app that calls this function.
+ * @param[in]  name       Name prefix to be registered.
+ * @param[in]  on_data    Interest handler. Can be NULL.
+ *
+ * @return  0, if success.
+ * @return  -1, if @p handle or @p name is NULL.
+ * @return  -1, if out of memory.
+ */
+int ndn_app_register_prefix(ndn_app_t* handle, ndn_name_t* name,
+			    ndn_app_interest_cb_t on_interest);
 
 #ifdef __cplusplus
 }
