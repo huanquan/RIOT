@@ -18,40 +18,41 @@
 #include <string.h>
 
 #include "net/gnrc/nettype.h"
-#include "net/ndn/encoding/block.h"
-#include "net/ndn/encoding/interest.h"
 #include "random.h"
+
+#include "net/ndn/encoding/interest.h"
 
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
 
-int ndn_interest_create(ndn_name_t* name, void* selectors, uint32_t lifetime, ndn_block_t* block)
+ndn_shared_block_t* ndn_interest_create(ndn_name_t* name, void* selectors,
+					uint32_t lifetime)
 {
-    if (name == NULL || block == NULL) return -1;
+    if (name == NULL) return NULL;
 
     (void)selectors;  //TODO: support selectors.
 
     int name_len = ndn_name_total_length(name);
-    if (name_len <= 0) return -1;
+    if (name_len <= 0) return NULL;
 
     int lt_len = ndn_block_integer_length(lifetime); // length of the lifetime value
 
     if (name_len + lt_len + 8 > 253)
-	return -1;  //TODO: support multi-byte length field.
+	return NULL;  //TODO: support multi-byte length field.
 
-    block->len = 10 + name_len + lt_len;
-    uint8_t* buf = (uint8_t*)malloc(block->len);
+    ndn_block_t inst;
+    inst.len = 10 + name_len + lt_len;
+    uint8_t* buf = (uint8_t*)malloc(inst.len);
     if (buf == NULL) {
 	DEBUG("ndn_encoding: cannot allocate memory for interest block\n");
-	block->len = 0;
-        return -1;
+        return NULL;
     }
-    block->buf = buf;
+    inst.buf = buf;
 
     // Fill in the Interest header and name field.
     buf[0] = NDN_TLV_INTEREST;
-    buf[1] = block->len - 2;
+    buf[1] = inst.len - 2;
     ndn_name_wire_encode(name, buf + 2, name_len);
     
     // Fill in the nonce.
@@ -69,7 +70,13 @@ int ndn_interest_create(ndn_name_t* name, void* selectors, uint32_t lifetime, nd
     buf[7] = lt_len;
     ndn_block_put_integer(lifetime, buf + 8, buf[7]);
 
-    return 0;
+    ndn_shared_block_t* shared = ndn_shared_block_create_by_move(&inst);
+    if (shared == NULL) {
+	free((void*)inst.buf);
+	return NULL;
+    }
+
+    return shared;
 }
 
 

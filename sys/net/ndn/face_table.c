@@ -20,7 +20,7 @@
 
 #include "net/ndn/face_table.h"
 
-#define ENABLE_DEBUG (1)
+#define ENABLE_DEBUG (0)
 #include "debug.h"
 
 static ndn_face_entry_t *_face_table;

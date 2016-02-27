@@ -26,6 +26,7 @@
 #include "net/gnrc/pktbuf.h"
 #include "net/ndn/ndn-constants.h"
 #include "net/ndn/encoding/block.h"
+#include "net/ndn/encoding/shared_block.h"
 #include "net/ndn/encoding/name.h"
 
 #ifdef __cplusplus
@@ -33,20 +34,18 @@ extern "C" {
 #endif
 
 /**
- * @brief   Creates a TLV block that contains the encoded Interest packet.
+ * @brief   Creates a shared TLV block that contains the encoded Interest packet.
  *
  * @param[in]  name       Name of the Interest.
  * @param[in]  selectors  Selectors of the Interest. Can be NULL if omitted.
  * @param[in]  lifetime   Lifetime of the Interest.
- * @param[out] block      Block to store the encoded interest.
  *
- * @return  0, if success.
+ * @return  Pointer to the shared block, if success.
  * @return  -1, if @p name is NULL or invalid.
- * @return  -1, if @p block is NULL.
  * @return  -1, if out of memory.
  */
-int ndn_interest_create(ndn_name_t* name, void* selectors,
-			uint32_t lifetime, ndn_block_t* block);
+ndn_shared_block_t* ndn_interest_create(ndn_name_t* name, void* selectors,
+					uint32_t lifetime);
 
 /**
  * @brief    Creates a packet snip for the Interest.
