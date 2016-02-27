@@ -25,6 +25,8 @@
 extern "C" {
 #endif
 
+#define NDN_APP_MSG_TYPE_TERMINATE  (0x0300)
+
 #define NDN_APP_MSG_TYPE_TIMEOUT    (0x0301)
 
 #define NDN_APP_MSG_TYPE_DATA       (0x0302)
@@ -35,6 +37,7 @@ extern "C" {
 
 #define NDN_APP_MSG_TYPE_REMOVE_FACE   (0x0305)
 
+#define NDN_APP_MSG_TYPE_ADD_FIB    (0x0306)
 
 #ifdef __cplusplus
 }

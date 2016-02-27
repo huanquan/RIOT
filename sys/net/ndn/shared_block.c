@@ -20,7 +20,7 @@
 
 #include "net/ndn/shared_block.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG (1)
 #include "debug.h"
 
 ndn_shared_block_t* ndn_shared_block_create(ndn_block_t* block)
@@ -34,6 +34,8 @@ ndn_shared_block_t* ndn_shared_block_create(ndn_block_t* block)
 	DEBUG("ndn: cannot allocate memory for shared block\n");
 	return NULL;
     }
+
+    memset(shared, 0, sizeof(ndn_shared_block_t));
 
     uint8_t* nbuf = (uint8_t*)malloc(block->len);
     if (nbuf == NULL) {
@@ -59,6 +61,8 @@ ndn_shared_block_t* ndn_shared_block_create_by_move(ndn_block_t* block)
 	DEBUG("ndn: cannot allocate memory for shared block\n");
 	return NULL;
     }
+
+    memset(shared, 0, sizeof(ndn_shared_block_t));
 
     // "Move" memory into the shared block
     shared->block.buf = block->buf;

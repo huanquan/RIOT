@@ -47,10 +47,8 @@ void _set_timeout(ndn_pit_entry_t* entry, uint32_t us)
     xtimer_set_msg(&entry->timer, us, &entry->timer_msg, thread_getpid());
 }
 
-/* handles GNRC_NETAPI_MSG_TYPE_RCV commands */
-static void _receive(gnrc_pktsnip_t *pkt);
-/* sends packet over the appropriate interface(s) */
-static void _send(kernel_pid_t face_id, int face_type, gnrc_pktsnip_t *pkt);
+static void _process_packet(kernel_pid_t face_id, int face_type, gnrc_pktsnip_t *pkt);
+
 /* Main event loop for NDN */
 static void *_event_loop(void *args);
 
@@ -102,7 +100,7 @@ static void *_event_loop(void *args)
 
 	    case NDN_APP_MSG_TYPE_ADD_FACE:
 		DEBUG("ndn: ADD_FACE message received from pid %" PRIkernel_pid "\n",
-		      msg.sender_pid);;
+		      msg.sender_pid);
 		if (ndn_face_table_add((kernel_pid_t)msg.content.value, NDN_FACE_APP) != 0) {
 		    DEBUG("ndn: failed to add face id %u\n", msg.content.value);
 		    reply.content.value = 1;
@@ -114,9 +112,23 @@ static void *_event_loop(void *args)
 
 	    case NDN_APP_MSG_TYPE_REMOVE_FACE:
 		DEBUG("ndn: REMOVE_FACE message received from pid %" PRIkernel_pid "\n",
-		      msg.sender_pid);;
+		      msg.sender_pid);
 		if (ndn_face_table_remove((kernel_pid_t)msg.content.value) != 0) {
 		    DEBUG("ndn: failed to remove face id %u\n", msg.content.value);
+		    reply.content.value = 1;
+		} else {
+		    reply.content.value = 0;  // indicate success
+		}
+		msg_reply(&msg, &reply);
+		break;
+
+	    case NDN_APP_MSG_TYPE_ADD_FIB:
+		DEBUG("ndn: ADD_FIB message received from pid %" PRIkernel_pid "\n",
+		      msg.sender_pid);
+		if (ndn_fib_add((ndn_shared_block_t*)msg.content.ptr, msg.sender_pid,
+				NDN_FACE_APP) != 0) {
+		    DEBUG("ndn: failed to add fib entry\n");
+		    ndn_shared_block_release((ndn_shared_block_t*)msg.content.ptr);
 		    reply.content.value = 1;
 		} else {
 		    reply.content.value = 0;  // indicate success
@@ -127,14 +139,15 @@ static void *_event_loop(void *args)
             case GNRC_NETAPI_MSG_TYPE_RCV:
                 DEBUG("ndn: RCV message received from pid %" PRIkernel_pid "\n",
 		      msg.sender_pid);
-                _receive((gnrc_pktsnip_t *)msg.content.ptr);
+                _process_packet(msg.sender_pid, NDN_FACE_ETH,
+				(gnrc_pktsnip_t *)msg.content.ptr);
                 break;
 
             case GNRC_NETAPI_MSG_TYPE_SND:
                 DEBUG("ndn: SND message received from pid %" PRIkernel_pid "\n",
 		      msg.sender_pid);
-                _send(msg.sender_pid, NDN_FACE_APP,
-		      (gnrc_pktsnip_t *)msg.content.ptr);
+                _process_packet(msg.sender_pid, NDN_FACE_APP,
+				(gnrc_pktsnip_t *)msg.content.ptr);
                 break;
 
             case GNRC_NETAPI_MSG_TYPE_GET:
@@ -151,27 +164,19 @@ static void *_event_loop(void *args)
 }
 
 
-static void _receive(gnrc_pktsnip_t *pkt)
+static void _send_interest_to_app(kernel_pid_t id,
+				  ndn_shared_block_t* interest)
 {
-    if (pkt == NULL) return;
-
-    /* remove L2 information */
-    gnrc_pktsnip_t* netif = gnrc_pktsnip_search_type(pkt, GNRC_NETTYPE_NETIF);
-    if (netif != NULL)
-	gnrc_pktbuf_remove_snip(pkt, netif);
-
-    if (pkt->type != GNRC_NETTYPE_NDN)
-	DEBUG("ndn: incorrect packet type\n");
-
-    DEBUG("ndn: received NDN packet\n");
-    /* send payload to receivers */
-    if (!gnrc_netapi_dispatch_receive(GNRC_NETTYPE_NDNAPP,
-				      GNRC_NETREG_DEMUX_CTX_ALL, pkt)) {
-        DEBUG("ndn: unable to forward packet as no one is interested in it\n");
-        gnrc_pktbuf_release(pkt);
+    msg_t m;
+    m.type = NDN_APP_MSG_TYPE_INTEREST;
+    m.content.ptr = (void*)interest;
+    if (msg_try_send(&m, id) < 1) {
+	DEBUG("ndn: cannot send interest to pid %"
+	      PRIkernel_pid "\n", id);
+	// release the shared ptr here
+	ndn_shared_block_release(interest);
     }
-
-    return;
+    DEBUG("ndn: interest sent to pid %" PRIkernel_pid "\n", id);
 }
 
 static void _process_interest(kernel_pid_t face_id, int face_type,
@@ -228,17 +233,45 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
     }
     DEBUG("ndn: found matching fib\n");
 
+    /* send to the first available interface */
+    //TODO: differet forwarding strategies
     assert(fib_entry->face_list_size > 0);
     assert(fib_entry->face_list != NULL);
 
-    /* send to the first available interface */
-    kernel_pid_t iface = fib_entry->face_list[0].id;
-    DEBUG("ndn: send to face %" PRIkernel_pid "\n", iface);
-    ndn_netif_send(iface, pkt);
+    int index;
+    for (index = 0; index < fib_entry->face_list_size; ++index) {
+	// find the first face that is different from the incoming face
+	if (fib_entry->face_list[index].id != face_id)
+	    break;
+    }
+    if (index == fib_entry->face_list_size) {
+	DEBUG("ndn: no face available for forwarding\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }
+
+    kernel_pid_t iface = fib_entry->face_list[index].id;
+    switch (fib_entry->face_list[index].type) {
+	case NDN_FACE_ETH:
+	    DEBUG("ndn: send to eth face %" PRIkernel_pid "\n", iface);
+	    ndn_netif_send(iface, pkt);
+	    break;
+
+	case NDN_FACE_APP:
+	    DEBUG("ndn: send to app face %" PRIkernel_pid "\n", iface);
+	    gnrc_pktbuf_release(pkt);
+	    ndn_shared_block_t* si = ndn_shared_block_copy(pit_entry->shared_pi);
+	    _send_interest_to_app(iface, si);
+	    break;
+
+	default:
+	    break;
+    }
+
     return;
 }
 
-static void _send(kernel_pid_t face_id, int face_type, gnrc_pktsnip_t *pkt)
+static void _process_packet(kernel_pid_t face_id, int face_type, gnrc_pktsnip_t *pkt)
 {
     if (pkt == NULL) return;
 
