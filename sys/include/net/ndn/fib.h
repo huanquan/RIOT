@@ -22,7 +22,7 @@
 
 #include "kernel_types.h"
 #include "xtimer.h"
-#include "net/ndn/shared_block.h"
+#include "net/ndn/encoding/shared_block.h"
 #include "net/ndn/face_table.h"
 
 #ifdef __cplusplus

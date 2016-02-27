@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "net/ndn/shared_block.h"
+#include "net/ndn/encoding/shared_block.h"
 
 #define ENABLE_DEBUG (1)
 #include "debug.h"

@@ -594,12 +594,10 @@ static void test_ndn_interest_create__invalid(void)
     ndn_name_t bad2 = { 1, comps + 2 };
     ndn_name_t bad3 = { 1, comps + 3 };
 
-    ndn_block_t block;
-
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_create(NULL, NULL, 4000, NULL));
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_create(&bad1, NULL, 4000, &block));
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_create(&bad2, NULL, 4000, &block));
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_create(&bad3, NULL, 4000, &block));
+    TEST_ASSERT_NULL(ndn_interest_create(NULL, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create(&bad1, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create(&bad2, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create(&bad3, NULL, 4000));
 }
 
 static void test_ndn_interest_create__valid(void)
@@ -626,12 +624,12 @@ static void test_ndn_interest_create__valid(void)
     	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
     };
 
-    ndn_block_t block;
-    TEST_ASSERT_EQUAL_INT(0, ndn_interest_create(&name, NULL, lifetime, &block));
-    TEST_ASSERT_NOT_NULL(block.buf);
-    TEST_ASSERT_EQUAL_INT(sizeof(result), block.len);
-    TEST_ASSERT(0 == memcmp(block.buf, result, 20));
-    TEST_ASSERT(0 == memcmp(block.buf + 24, result + 24, 4));
+    ndn_shared_block_t* sb = ndn_interest_create(&name, NULL, lifetime);
+    TEST_ASSERT_NOT_NULL(sb);
+    TEST_ASSERT_NOT_NULL(sb->block.buf);
+    TEST_ASSERT_EQUAL_INT(sizeof(result), sb->block.len);
+    TEST_ASSERT(0 == memcmp(sb->block.buf, result, 20));
+    TEST_ASSERT(0 == memcmp(sb->block.buf + 24, result + 24, 4));
 }
 
 static void test_ndn_interest_create_packet__valid(void)

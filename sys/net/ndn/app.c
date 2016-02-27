@@ -24,7 +24,7 @@
 #include "utlist.h"
 #include "net/gnrc/netapi.h"
 #include "net/gnrc/netreg.h"
-#include "net/ndn/shared_block.h"
+#include "net/ndn/encoding/shared_block.h"
 #include "net/ndn/encoding/name.h"
 #include "net/ndn/encoding/interest.h"
 #include "net/ndn/msg_type.h"
@@ -88,7 +88,7 @@ static int _notify_consumer_timeout(ndn_app_t* handle, ndn_block_t* pi)
     _consumer_cb_entry_t *entry, *tmp;
     DL_FOREACH_SAFE(handle->_ccb_table, entry, tmp) {
 	ndn_block_t n;
-	if (ndn_interest_get_name(&entry->pi, &n) != 0) {
+	if (ndn_interest_get_name(&entry->pi->block, &n) != 0) {
 	    DEBUG("ndn_app: cannot parse name from interest in cb table (pid=%"
 		  PRIkernel_pid ")\n", handle->id);
 	    goto clean;
@@ -105,12 +105,12 @@ static int _notify_consumer_timeout(ndn_app_t* handle, ndn_block_t* pi)
 	if (entry->on_timeout != NULL) {
 	    DEBUG("ndn_app: call consumer timeout cb (pid=%"
 		  PRIkernel_pid ")\n", handle->id);
-	    r = entry->on_timeout(&entry->pi);
+	    r = entry->on_timeout(&entry->pi->block);
 	}
 
     clean:
 	DL_DELETE(handle->_ccb_table, entry);
-	free((void*)entry->pi.buf);
+	ndn_shared_block_release(entry->pi);
 	free(entry);
 
 	// stop the app now if the callback returns error or stop
@@ -226,35 +226,9 @@ static inline void _release_consumer_cb_table(ndn_app_t* handle)
 	DEBUG("ndn_app: remove consumer cb entry (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
 	DL_DELETE(handle->_ccb_table, entry);
-	free((void*)entry->pi.buf);
+	ndn_shared_block_release(entry->pi);
 	free(entry);
     }
-}
-
-static int _add_consumer_cb_entry(ndn_app_t* handle, ndn_block_t* pi,
-				  ndn_app_data_cb_t on_data,
-				  ndn_app_timeout_cb_t on_timeout)
-{
-    _consumer_cb_entry_t *entry =
-	(_consumer_cb_entry_t*)malloc(sizeof(_consumer_cb_entry_t));
-    if (entry == NULL) {
-	DEBUG("ndn_app: cannot allocate memory for consumer cb entry (pid=%"
-	      PRIkernel_pid ")\n", handle->id);
-	return -1;
-    }
-
-    entry->on_data = on_data;
-    entry->on_timeout = on_timeout;
-
-    // "Move" pending interest block into the entry
-    entry->pi.buf = pi->buf;
-    entry->pi.len = pi->len;
-    pi->buf = NULL;
-    pi->len = 0;
-
-    DL_PREPEND(handle->_ccb_table, entry);
-    DEBUG("ndn_app: add consumer cb entry (pid=%" PRIkernel_pid ")\n", handle->id);
-    return 0;
 }
 
 static inline void _release_producer_cb_table(ndn_app_t* handle)
@@ -289,6 +263,28 @@ void ndn_app_destroy(ndn_app_t* handle)
     free(handle);
 }
 
+static int _add_consumer_cb_entry(ndn_app_t* handle, ndn_shared_block_t* si,
+				  ndn_app_data_cb_t on_data,
+				  ndn_app_timeout_cb_t on_timeout)
+{
+    _consumer_cb_entry_t *entry =
+	(_consumer_cb_entry_t*)malloc(sizeof(_consumer_cb_entry_t));
+    if (entry == NULL) {
+	DEBUG("ndn_app: cannot allocate memory for consumer cb entry (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
+	return -1;
+    }
+
+    entry->on_data = on_data;
+    entry->on_timeout = on_timeout;
+
+    entry->pi = si;  // move semantics
+
+    DL_PREPEND(handle->_ccb_table, entry);
+    DEBUG("ndn_app: add consumer cb entry (pid=%" PRIkernel_pid ")\n", handle->id);
+    return 0;
+}
+
 int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
 			     void* selectors, uint32_t lifetime,
 			     ndn_app_data_cb_t on_data,
@@ -297,15 +293,15 @@ int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
     if (handle == NULL) return -1;
 
     // create encoded TLV block
-    ndn_block_t pi;
-    if (ndn_interest_create(name, selectors, lifetime, &pi) != 0) {
+    ndn_shared_block_t* si = ndn_interest_create(name, selectors, lifetime);
+    if (si == NULL) {
 	DEBUG("ndn_app: cannot create interest block (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
 	return -1;
     }
 
     // create interest packet snip
-    gnrc_pktsnip_t* inst = ndn_interest_create_packet(&pi);
+    gnrc_pktsnip_t* inst = ndn_interest_create_packet(&si->block);
     if (inst == NULL) {
 	DEBUG("ndn_app: cannot create interest packet snip (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
@@ -313,19 +309,21 @@ int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
     }
 
     // add entry to consumer callback table
-    if (0 != _add_consumer_cb_entry(handle, &pi, on_data, on_timeout)) {
+    if (0 != _add_consumer_cb_entry(handle, si, on_data, on_timeout)) {
 	DEBUG("ndn_app: cannot add consumer cb entry (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
+	ndn_shared_block_release(si);
 	gnrc_pktbuf_release(inst);
 	return -1;
     }
-    // "pi" will be useless after this point
+    // "si" is useless after this point
 
     // send packet to NDN thread
     if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_NDN,
 				   GNRC_NETREG_DEMUX_CTX_ALL, inst)) {
 	DEBUG("ndn_test: cannot send interest to NDN thread (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
+	//TODO: remove consumer cb entry
 	gnrc_pktbuf_release(inst);
 	return -1;
     }

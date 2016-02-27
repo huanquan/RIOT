@@ -21,8 +21,7 @@
 #define NDN_APP_H_
 
 #include "kernel_types.h"
-#include "net/ndn/shared_block.h"
-#include "net/ndn/encoding/block.h"
+#include "net/ndn/encoding/shared_block.h"
 #include "net/ndn/encoding/name.h"
 #include "net/gnrc/pktbuf.h"
 
@@ -66,7 +65,7 @@ typedef int (*ndn_app_error_cb_t)(int error);
 typedef struct _consumer_cb_entry {
     struct _consumer_cb_entry *prev;
     struct _consumer_cb_entry *next;
-    ndn_block_t pi;                     /**< expressed interest */
+    ndn_shared_block_t* pi;             /**< expressed interest */
     ndn_app_data_cb_t  on_data;         /**< handler for the on_data event */
     ndn_app_timeout_cb_t  on_timeout;   /**< handler for the on_timeout event */
 } _consumer_cb_entry_t;
