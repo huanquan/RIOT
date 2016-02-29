@@ -21,6 +21,7 @@
 #include "net/ndn/encoding/block.h"
 #include "net/ndn/encoding/name.h"
 #include "net/ndn/encoding/interest.h"
+#include "net/ndn/encoding/metainfo.h"
 #include "random.h"
 
 #include "unittests-constants.h"
@@ -797,10 +798,161 @@ Test *tests_ndn_encoding_interest_tests(void)
     return (Test *)&ndn_encoding_interest_tests;
 }
 
+/* tests for metainfo.h */
+
+static void test_ndn_metainfo_total_length__all(void)
+{
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_total_length(NULL));
+
+    ndn_metainfo_t meta1 = { -1, -1 };
+    TEST_ASSERT_EQUAL_INT(2, ndn_metainfo_total_length(&meta1));
+
+    ndn_metainfo_t meta2 = { -1, 1 };
+    TEST_ASSERT_EQUAL_INT(5, ndn_metainfo_total_length(&meta2));
+
+    ndn_metainfo_t meta3 = { -1, 0x100 };
+    TEST_ASSERT_EQUAL_INT(6, ndn_metainfo_total_length(&meta3));
+
+    ndn_metainfo_t meta4 = { 1, -1 };
+    TEST_ASSERT_EQUAL_INT(5, ndn_metainfo_total_length(&meta4));
+
+    ndn_metainfo_t meta5 = { 1, 0x100 };
+    TEST_ASSERT_EQUAL_INT(9, ndn_metainfo_total_length(&meta5));
+}
+
+static void test_ndn_metainfo_wire_encode__all(void)
+{
+    uint8_t res[16];
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_wire_encode(NULL, res, sizeof(res)));
+
+    ndn_metainfo_t meta1 = { -1, -1 };
+    uint8_t buf1[] = { NDN_TLV_METAINFO, 0 };
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_wire_encode(&meta1, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_wire_encode(&meta1, res, -1));
+    TEST_ASSERT_EQUAL_INT(2, ndn_metainfo_wire_encode(&meta1, res, sizeof(res)));
+    TEST_ASSERT(0 == memcmp(res, buf1, sizeof(buf1)));
+
+    ndn_metainfo_t meta2 = { -1, 1 };
+    uint8_t buf2[] = {
+	NDN_TLV_METAINFO, 3,
+	NDN_TLV_FRESHNESS_PERIOD, 1, 1,
+    };
+    TEST_ASSERT_EQUAL_INT(5, ndn_metainfo_wire_encode(&meta2, res, sizeof(res)));
+    TEST_ASSERT(0 == memcmp(res, buf2, sizeof(buf2)));
+
+    ndn_metainfo_t meta3 = { -1, 0x100 };
+    uint8_t buf3[] = {
+	NDN_TLV_METAINFO, 4,
+	NDN_TLV_FRESHNESS_PERIOD, 2, 0x01, 0,
+    };
+    TEST_ASSERT_EQUAL_INT(6, ndn_metainfo_wire_encode(&meta3, res, sizeof(res)));
+    TEST_ASSERT(0 == memcmp(res, buf3, sizeof(buf3)));
+
+    ndn_metainfo_t meta4 = { 1, -1 };
+    uint8_t buf4[] = {
+	NDN_TLV_METAINFO, 3,
+	NDN_TLV_CONTENT_TYPE, 1, 1,
+    };
+    TEST_ASSERT_EQUAL_INT(5, ndn_metainfo_wire_encode(&meta4, res, sizeof(res)));
+    TEST_ASSERT(0 == memcmp(res, buf4, sizeof(buf4)));
+
+    ndn_metainfo_t meta5 = { 1, 0x100 };
+    uint8_t buf5[] = {
+	NDN_TLV_METAINFO, 7,
+	NDN_TLV_CONTENT_TYPE, 1, 1,
+	NDN_TLV_FRESHNESS_PERIOD, 2, 0x01, 0,
+    };
+    TEST_ASSERT_EQUAL_INT(9, ndn_metainfo_wire_encode(&meta5, res, sizeof(res)));
+    TEST_ASSERT(0 == memcmp(res, buf5, sizeof(buf5)));
+}
+
+static void test_ndn_metainfo_from_block__invalid(void)
+{
+    ndn_metainfo_t meta;
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_from_block(NULL, 1, &meta));
+
+    uint8_t buf1[] = {
+	NDN_TLV_NAME, 10, 
+    };
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_from_block(buf1, sizeof(buf1), NULL));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_from_block(buf1, -10, &meta));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_from_block(buf1, sizeof(buf1), &meta));
+
+    uint8_t buf2[] = {
+	NDN_TLV_METAINFO, 2,
+	NDN_TLV_CONTENT_TYPE, 1, 1,
+    };
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_from_block(buf2, sizeof(buf2), &meta));
+
+    uint8_t buf3[] = {
+	NDN_TLV_METAINFO, 20,
+	NDN_TLV_CONTENT_TYPE, 1, 1,
+    };
+    TEST_ASSERT_EQUAL_INT(-1, ndn_metainfo_from_block(buf3, sizeof(buf3), &meta));
+}
+
+static void test_ndn_metainfo_from_block__valid(void)
+{
+    ndn_metainfo_t meta;
+
+    uint8_t buf0[] = { NDN_TLV_METAINFO, 0 };
+    TEST_ASSERT_EQUAL_INT(2, ndn_metainfo_from_block(buf0, sizeof(buf0), &meta));
+    TEST_ASSERT_EQUAL_INT(-1, meta.content_type);
+    TEST_ASSERT_EQUAL_INT(-1, meta.freshness);
+
+    uint8_t buf1[] = {
+	NDN_TLV_METAINFO, 4,
+	NDN_TLV_CONTENT_TYPE, 2, 0x12, 0x34,
+    };
+    TEST_ASSERT_EQUAL_INT(6, ndn_metainfo_from_block(buf1, sizeof(buf1), &meta));
+    TEST_ASSERT_EQUAL_INT(0x1234, meta.content_type);
+
+    uint8_t buf2[] = {
+	NDN_TLV_METAINFO, 4,
+	NDN_TLV_FRESHNESS_PERIOD, 2, 0x12, 0x34,
+    };
+    TEST_ASSERT_EQUAL_INT(6, ndn_metainfo_from_block(buf2, sizeof(buf2), &meta));
+    TEST_ASSERT_EQUAL_INT(0x1234, meta.freshness);
+
+    uint8_t buf3[] = {
+	NDN_TLV_METAINFO, 8,
+	NDN_TLV_CONTENT_TYPE, 2, 0x43, 0x21,
+	NDN_TLV_FRESHNESS_PERIOD, 2, 0x12, 0x34,
+    };
+    TEST_ASSERT_EQUAL_INT(10, ndn_metainfo_from_block(buf3, sizeof(buf3), &meta));
+    TEST_ASSERT_EQUAL_INT(0x4321, meta.content_type);
+    TEST_ASSERT_EQUAL_INT(0x1234, meta.freshness);
+
+    uint8_t buf4[] = {
+	NDN_TLV_METAINFO, 12,
+	NDN_TLV_CONTENT_TYPE, 2, 0x98, 0x76,
+	NDN_TLV_FRESHNESS_PERIOD, 2, 0x54, 0x32,
+	NDN_TLV_NAME_COMPONENT, 2, 1, 1,
+    };
+    TEST_ASSERT_EQUAL_INT(14, ndn_metainfo_from_block(buf4, sizeof(buf4), &meta));
+    TEST_ASSERT_EQUAL_INT(0x9876, meta.content_type);
+    TEST_ASSERT_EQUAL_INT(0x5432, meta.freshness);
+}
+
+Test *tests_ndn_encoding_metainfo_tests(void)
+{
+    EMB_UNIT_TESTFIXTURES(fixtures) {
+        new_TestFixture(test_ndn_metainfo_total_length__all),
+	new_TestFixture(test_ndn_metainfo_wire_encode__all),
+	new_TestFixture(test_ndn_metainfo_from_block__invalid),
+	new_TestFixture(test_ndn_metainfo_from_block__valid),
+    };
+
+    EMB_UNIT_TESTCALLER(ndn_encoding_metainfo_tests, NULL, NULL, fixtures);
+
+    return (Test *)&ndn_encoding_metainfo_tests;
+}
+
 void tests_ndn_encoding(void)
 {
     TESTS_RUN(tests_ndn_encoding_block_tests());
     TESTS_RUN(tests_ndn_encoding_name_tests());
     TESTS_RUN(tests_ndn_encoding_interest_tests());
+    TESTS_RUN(tests_ndn_encoding_metainfo_tests());
 }
 /** @} */

@@ -39,8 +39,8 @@ enum {
     /* Data-related TLVs */
     NDN_TLV_METAINFO         = 20,
     NDN_TLV_CONTENT          = 21,
-    NDN_TLV_SIGNATUREINFO    = 22,
-    NDN_TLV_SIGNATUREVALUE   = 23,
+    NDN_TLV_SIGNATURE_INFO   = 22,
+    NDN_TLV_SIGNATURE_VALUE  = 23,
 
     /* Metainfo-related TLVs */
     NDN_TLV_CONTENT_TYPE     = 24,
@@ -50,6 +50,20 @@ enum {
     NDN_TLV_SIGNATURE_TYPE   = 27,
 };
 
+
+/* content type values */
+enum {
+    NDN_CONTENT_TYPE_BLOB = 0,
+    NDN_CONTENT_TYPE_LINK = 1,
+    NDN_CONTENT_TYPE_KEY  = 2,
+    NDN_CONTENT_TYPE_NACK = 3,
+};
+
+/* signature type values */
+enum {
+    NDN_SIG_TYPE_DIGEST_SHA256 = 0,
+    NDN_SIG_TYPE_HMAC_SHA256   = 4,
+};
 
 #ifdef __cplusplus
 }
