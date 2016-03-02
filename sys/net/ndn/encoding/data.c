@@ -393,7 +393,7 @@ int ndn_data_verify_signature(ndn_block_t* block,
 	case NDN_SIG_TYPE_DIGEST_SHA256:
 	    sha256(sig_start, sig_value.buf - sig_start, sig);
 	    if (memcmp(sig, sig_value.buf + 2, sizeof(sig)) != 0) {
-		DEBUG("ndn_encoding: failed to verify DigestSha256 signature\n");
+		DEBUG("ndn_encoding: fail to verify DigestSha256 signature\n");
 		return -1;
 	    }
 	    else
@@ -407,7 +407,7 @@ int ndn_data_verify_signature(ndn_block_t* block,
 	    hmac_sha256(key, key_len, (const unsigned*)sig_start,
 			sig_value.buf - sig_start, sig);
 	    if (memcmp(sig, sig_value.buf + 2, sizeof(sig)) != 0) {
-		DEBUG("ndn_encoding: failed to verify HMAC_SHA256 signature\n");
+		DEBUG("ndn_encoding: fail to verify HMAC_SHA256 signature\n");
 		return -1;
 	    }
 	    else

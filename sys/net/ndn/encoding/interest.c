@@ -36,7 +36,8 @@ ndn_shared_block_t* ndn_interest_create(ndn_name_t* name, void* selectors,
     int name_len = ndn_name_total_length(name);
     if (name_len <= 0) return NULL;
 
-    int lt_len = ndn_block_integer_length(lifetime); // length of the lifetime value
+    // Get length of the lifetime value
+    int lt_len = ndn_block_integer_length(lifetime);
 
     if (name_len + lt_len + 8 > 253)
 	return NULL;  //TODO: support multi-byte length field.
@@ -57,7 +58,7 @@ ndn_shared_block_t* ndn_interest_create(ndn_name_t* name, void* selectors,
     
     // Fill in the nonce.
     buf += name_len + 2;
-    uint32_t nonce = genrand_uint32();
+    uint32_t nonce = random_uint32();
     buf[0] = NDN_TLV_NONCE;
     buf[1] = 4;  // Nonce field length
     buf[2] = (nonce >> 24) & 0xFF;
@@ -85,7 +86,8 @@ gnrc_pktsnip_t* ndn_interest_create_packet(ndn_block_t* block)
     if (block == NULL || block->buf == NULL || block->len <= 0) return NULL;
 
     // Create nonce+lifetime snip.
-    gnrc_pktsnip_t *pkt = gnrc_pktbuf_add(NULL, (void*)block->buf, block->len, GNRC_NETTYPE_NDN);
+    gnrc_pktsnip_t *pkt = gnrc_pktbuf_add(NULL, (void*)block->buf, block->len,
+					  GNRC_NETTYPE_NDN);
     if (pkt == NULL) {
 	DEBUG("ndn_encoding: cannot allocate packet snip for interest\n");
         return NULL;
@@ -95,7 +97,8 @@ gnrc_pktsnip_t* ndn_interest_create_packet(ndn_block_t* block)
 
 int ndn_interest_get_block(gnrc_pktsnip_t* pkt, ndn_block_t* block)
 {
-    if (block == NULL || pkt == NULL || pkt->type != GNRC_NETTYPE_NDN) return -1;
+    if (block == NULL || pkt == NULL || pkt->type != GNRC_NETTYPE_NDN)
+	return -1;
 
     const uint8_t* buf = (uint8_t*)pkt->data;
     int len = pkt->size;

@@ -31,7 +31,8 @@ static ndn_fib_entry_t* _fib_entry_add_face(ndn_fib_entry_t* entry,
 					    kernel_pid_t id, int type)
 {
     if (entry->face_list == NULL) {
-	entry->face_list = (_face_list_entry_t*)malloc(sizeof(_face_list_entry_t));
+	entry->face_list =
+	    (_face_list_entry_t*)malloc(sizeof(_face_list_entry_t));
 	if (entry->face_list == NULL) {
 	    DEBUG("ndn: fail to allocate memory for face list\n");
 	    return NULL;
@@ -67,7 +68,8 @@ static ndn_fib_entry_t* _fib_entry_add_face(ndn_fib_entry_t* entry,
     }
 }
 
-int ndn_fib_add(ndn_shared_block_t* prefix, kernel_pid_t face_id, int face_type)
+int ndn_fib_add(ndn_shared_block_t* prefix, kernel_pid_t face_id,
+		int face_type)
 {
     assert(prefix != NULL);
 
@@ -81,17 +83,20 @@ int ndn_fib_add(ndn_shared_block_t* prefix, kernel_pid_t face_id, int face_type)
 	    // add face to fib entry
 	    if (_fib_entry_add_face(entry, face_id, face_type) == NULL) {
 		DEBUG("ndn: cannot add face %" PRIkernel_pid
-		      " (type=%d) to existing fib entry\n", face_id, face_type);
+		      " (type=%d) to existing fib entry\n",
+		      face_id, face_type);
 		return -1;
 	    }
 	    // we're done
 	    return 0;
 	} else if (r == -2) {
 	    // the prefix to add is a shorter prefix of an existing prefix
-	    // the destination face should be added to the existing entry (aka. child inherit)
+	    // the destination face should be added to the existing entry
+	    // (aka. child inherit)
 	    if (_fib_entry_add_face(entry, face_id, face_type) == NULL) {
 		DEBUG("ndn: cannot add face %" PRIkernel_pid
-		      " (type=%d) to existing fib entry\n", face_id, face_type);
+		      " (type=%d) to existing fib entry\n",
+		      face_id, face_type);
 		return -1;
 	    }
 	    // continue to check other entries

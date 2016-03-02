@@ -61,14 +61,16 @@ ndn_app_t* ndn_app_create(void)
     reply.content.value = 1;
     msg_send_receive(&add_face, &reply, ndn_pid);
     if (reply.content.value != 0) {
-	DEBUG("ndn_app: cannot add app face (pid=%" PRIkernel_pid ")\n", handle->id);
+	DEBUG("ndn_app: cannot add app face (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
 	free(handle);
 	return NULL;
     }
 
     // init msg queue to receive message
     if (msg_init_queue(handle->_msg_queue, NDN_APP_MSG_QUEUE_SIZE) != 0) {
-	DEBUG("ndn_app: cannot init msg queue (pid=%" PRIkernel_pid ")\n", handle->id);
+	DEBUG("ndn_app: cannot init msg queue (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
 	free(handle);
 	return NULL;
     }
@@ -167,13 +169,15 @@ int ndn_app_run(ndn_app_t* handle)
 
 	switch (msg.type) {
 	    case NDN_APP_MSG_TYPE_TERMINATE:
-		DEBUG("ndn_app: TERMINATE msg received from thread %" PRIkernel_pid
-		      " (pid=%" PRIkernel_pid ")\n", msg.sender_pid, handle->id);
+		DEBUG("ndn_app: TERMINATE msg received from thread %"
+		      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+		      msg.sender_pid, handle->id);
 		return NDN_APP_STOP;
 
 	    case NDN_APP_MSG_TYPE_TIMEOUT:
-		DEBUG("ndn_app: TIMEOUT msg received from thread %" PRIkernel_pid
-		      " (pid=%" PRIkernel_pid ")\n", msg.sender_pid, handle->id);
+		DEBUG("ndn_app: TIMEOUT msg received from thread %"
+		      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+		      msg.sender_pid, handle->id);
 		ptr = (ndn_shared_block_t*)msg.content.ptr;
 
 		ret = _notify_consumer_timeout(handle, &ptr->block);
@@ -181,16 +185,18 @@ int ndn_app_run(ndn_app_t* handle)
 		ndn_shared_block_release(ptr);
 
 		if (ret != NDN_APP_CONTINUE) {
-		    DEBUG("ndn_app: stop app because timeout callback returned %s (pid=%"
-			  PRIkernel_pid ")\n", ret == NDN_APP_STOP ? "STOP" : "ERROR",
+		    DEBUG("ndn_app: stop app because timeout callback returned"
+			  " %s (pid=%" PRIkernel_pid ")\n",
+			  ret == NDN_APP_STOP ? "STOP" : "ERROR",
 			  handle->id);
 		    return ret;
 		}
 		break;
 
 	    case NDN_APP_MSG_TYPE_INTEREST:
-		DEBUG("ndn_app: INTEREST msg received from thread %" PRIkernel_pid
-		      " (pid=%" PRIkernel_pid ")\n", msg.sender_pid, handle->id);
+		DEBUG("ndn_app: INTEREST msg received from thread %"
+		      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+		      msg.sender_pid, handle->id);
 		ptr = (ndn_shared_block_t*)msg.content.ptr;
 
 		ret = _notify_producer_interest(handle, &ptr->block);
@@ -198,8 +204,9 @@ int ndn_app_run(ndn_app_t* handle)
 		ndn_shared_block_release(ptr);
 
 		if (ret != NDN_APP_CONTINUE) {
-		    DEBUG("ndn_app: stop app because interest callback returned %s (pid=%"
-			  PRIkernel_pid ")\n", ret == NDN_APP_STOP ? "STOP" : "ERROR",
+		    DEBUG("ndn_app: stop app because interest cb returned"
+			  " %s (pid=%" PRIkernel_pid ")\n",
+			  ret == NDN_APP_STOP ? "STOP" : "ERROR",
 			  handle->id);
 		    return ret;
 		}
@@ -255,7 +262,8 @@ void ndn_app_destroy(ndn_app_t* handle)
     reply.content.value = 1;
     msg_send_receive(&add_face, &reply, ndn_pid);
     if (reply.content.value != 0) {
-	DEBUG("ndn_app: error removing app face (pid=%" PRIkernel_pid ")\n", handle->id);
+	DEBUG("ndn_app: error removing app face (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
 	// ignore the error anyway...
     }
 
@@ -281,7 +289,8 @@ static int _add_consumer_cb_entry(ndn_app_t* handle, ndn_shared_block_t* si,
     entry->pi = si;  // move semantics
 
     DL_PREPEND(handle->_ccb_table, entry);
-    DEBUG("ndn_app: add consumer cb entry (pid=%" PRIkernel_pid ")\n", handle->id);
+    DEBUG("ndn_app: add consumer cb entry (pid=%"
+	  PRIkernel_pid ")\n", handle->id);
     return 0;
 }
 
@@ -347,7 +356,8 @@ _add_producer_cb_entry(ndn_app_t* handle, ndn_shared_block_t* n,
     entry->on_interest = on_interest;
 
     DL_PREPEND(handle->_pcb_table, entry);
-    DEBUG("ndn_app: add producer cb entry (pid=%" PRIkernel_pid ")\n", handle->id);
+    DEBUG("ndn_app: add producer cb entry (pid=%"
+	  PRIkernel_pid ")\n", handle->id);
     return entry;
 }
 
@@ -370,7 +380,8 @@ int ndn_app_register_prefix(ndn_app_t* handle, ndn_name_t* name,
 	return -1;
     }
 
-    _producer_cb_entry_t* entry = _add_producer_cb_entry(handle, sn, on_interest);
+    _producer_cb_entry_t* entry =
+	_add_producer_cb_entry(handle, sn, on_interest);
     if (entry == NULL) {
 	DEBUG("ndn_app: failed to add producer cb entry (pid=%"
 	      PRIkernel_pid ")", handle->id);

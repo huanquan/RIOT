@@ -50,16 +50,20 @@ void ndn_netif_auto_add(void)
 	kernel_pid_t iface = ifs[i];
 
 	/* get device type */
-	if ((gnrc_netapi_get(iface, NETOPT_DEVICE_TYPE, 0, &_netif_table[i].dev_type,
+	if ((gnrc_netapi_get(iface, NETOPT_DEVICE_TYPE, 0,
+			     &_netif_table[i].dev_type,
 			     sizeof(uint16_t)) < 0)) {
-	    DEBUG("ndn: cannot get device type (pid=%" PRIkernel_pid ")\n", iface);
+	    DEBUG("ndn: cannot get device type (pid=%"
+		  PRIkernel_pid ")\n", iface);
 	    continue;
 	}
 
 	/* get device mtu */
-	if ((gnrc_netapi_get(iface, NETOPT_MAX_PACKET_SIZE, 0, &_netif_table[i].mtu,
+	if ((gnrc_netapi_get(iface, NETOPT_MAX_PACKET_SIZE, 0,
+			     &_netif_table[i].mtu,
 			     sizeof(uint16_t)) < 0)) {
-	    DEBUG("ndn: cannot get device mtu (pid=%" PRIkernel_pid ")\n", iface);
+	    DEBUG("ndn: cannot get device mtu (pid=%"
+		  PRIkernel_pid ")\n", iface);
 	    continue;
 	}
 	
@@ -73,12 +77,14 @@ void ndn_netif_auto_add(void)
 		ndn_block_t empty = { buf, sizeof(buf) }; // URI = /
 		ndn_shared_block_t* shared = ndn_shared_block_create(&empty);
 		if (shared != NULL
-		    && ndn_fib_add(shared, iface, NDN_FACE_ETH) == 0)
+		    && ndn_fib_add(shared, iface, NDN_FACE_ETH) == 0) {
 		    DEBUG("ndn: default route added for ethernet device\n");
+		}
 	    }
-	    else
+	    else {
 		DEBUG("ndn: failed to add ethernet device (pid=%"
 		      PRIkernel_pid ") into face table\n", iface);
+	    }
 	} /* ignore other types of devices for now */
     }
 }
@@ -108,8 +114,8 @@ int ndn_netif_send(kernel_pid_t iface, gnrc_pktsnip_t* pkt)
 
     /* check mtu */
     if (gnrc_pkt_len(pkt->next) > netif->mtu) {
-	DEBUG("ndn: packet size (%u) exceeds device mtu (iface=%" PRIkernel_pid ")\n",
-	      gnrc_pkt_len(pkt->next), iface);
+	DEBUG("ndn: packet size (%u) exceeds device mtu (iface=%"
+	      PRIkernel_pid ")\n", gnrc_pkt_len(pkt->next), iface);
 	gnrc_pktbuf_release(pkt);
 	return -1;
     }
