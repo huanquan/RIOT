@@ -314,6 +314,7 @@ endif
 ifneq (,$(filter ndn_encoding,$(USEMODULE)))
     USEMODULE += gnrc_pktbuf
     USEMODULE += random
+    USEMODULE += hashes
 endif
 
 ifneq (,$(filter newlib_nano,$(USEMODULE)))

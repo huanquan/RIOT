@@ -62,7 +62,7 @@ ndn_shared_block_t* ndn_interest_create(ndn_name_t* name, void* selectors,
 gnrc_pktsnip_t* ndn_interest_create_packet(ndn_block_t* block);
 
 /**
- * @brief  Retrieve the TLV-encoded Interest packet as a block.
+ * @brief  Retrieves the TLV-encoded Interest packet as a block.
  *
  * @param[in]  pkt        Packet snip containing the Interest packet.
  * @param[out] block      Place to store the TLV block of the Interest.
@@ -74,7 +74,7 @@ gnrc_pktsnip_t* ndn_interest_create_packet(ndn_block_t* block);
 int ndn_interest_get_block(gnrc_pktsnip_t* pkt, ndn_block_t* block);
 
 /**
- * @brief  Retrieve the TLV-encoded name from an Interest TLV block.
+ * @brief  Retrieves the TLV-encoded name from an Interest TLV block.
  *
  * @param[in]  block      TLV block containing the Interest packet.
  * @param[out] name       Place to store the TLV block of the name.
@@ -86,7 +86,7 @@ int ndn_interest_get_block(gnrc_pktsnip_t* pkt, ndn_block_t* block);
 int ndn_interest_get_name(ndn_block_t* block, ndn_block_t* name);
 
 /**
- * @brief  Retrieve the nonce value from an Interest TLV block.
+ * @brief  Retrieves the nonce value from an Interest TLV block.
  *
  * @param[in]  block      TLV block containing the Interest packet.
  * @param[out] nonce      Place to store the nonce value.
@@ -98,7 +98,7 @@ int ndn_interest_get_name(ndn_block_t* block, ndn_block_t* name);
 int ndn_interest_get_nonce(ndn_block_t* block, uint32_t* nonce);
 
 /**
- * @brief  Retrieve the lifetime value from an Interest TLV block.
+ * @brief  Retrieves the lifetime value from an Interest TLV block.
  *
  * @param[in]  block      TLV block containing the Interest packet.
  * @param[out] life       Place to store the lifetime value.
