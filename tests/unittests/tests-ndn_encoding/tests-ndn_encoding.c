@@ -17,11 +17,13 @@
 
 #include "embUnit.h"
 
+#include "hashes/sha256.h"
 #include "net/ndn/ndn-constants.h"
 #include "net/ndn/encoding/block.h"
 #include "net/ndn/encoding/name.h"
 #include "net/ndn/encoding/interest.h"
 #include "net/ndn/encoding/metainfo.h"
+#include "net/ndn/encoding/data.h"
 #include "random.h"
 
 #include "unittests-constants.h"
@@ -948,11 +950,240 @@ Test *tests_ndn_encoding_metainfo_tests(void)
     return (Test *)&ndn_encoding_metainfo_tests;
 }
 
+/* tests for data.h */
+
+static void test_ndn_data_create__all(void)
+{
+    uint8_t buf[6] = "abcd";
+    ndn_name_component_t comps[4] = {
+	{ buf, 1 },
+	{ buf + 1, 1 },
+	{ buf + 2, 1 },
+	{ buf + 3, 1 }
+    };
+    ndn_name_t name = { 4, comps };  // URI = /a/b/c/d
+
+    ndn_metainfo_t meta = { NDN_CONTENT_TYPE_BLOB, 0x7102034 };
+
+    uint8_t con[] = { 0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10 };
+    ndn_block_t content;
+    content.buf = con;
+    content.len = sizeof(con);
+
+    uint8_t result[] = {
+	NDN_TLV_DATA, 75,
+	NDN_TLV_NAME, 12,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 1, 'd',
+	NDN_TLV_METAINFO, 9,
+	NDN_TLV_CONTENT_TYPE, 1, NDN_CONTENT_TYPE_BLOB,
+	NDN_TLV_FRESHNESS_PERIOD, 4, 7, 0x10, 0x20, 0x34,
+	NDN_TLV_CONTENT, 9,
+	0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10,
+	NDN_TLV_SIGNATURE_INFO, 3,
+	NDN_TLV_SIGNATURE_TYPE, 1, NDN_SIG_TYPE_DIGEST_SHA256,
+	NDN_TLV_SIGNATURE_VALUE, 32,
+	0xe3, 0x8f, 0x85, 0x5b, 0x51, 0x7f, 0x42, 0xa6, 0x4f, 0x5a, 0x34,
+	0x38, 0x00, 0x0b, 0x2b, 0x34, 0xa5, 0x85, 0x1c, 0xc9, 0x97, 0xf2,
+	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
+    };
+
+    ndn_shared_block_t* data = ndn_data_create(&name, &meta, &content, NULL, 0);
+    TEST_ASSERT_NOT_NULL(data);
+    TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result)));
+
+    ndn_shared_block_release(data);
+
+    unsigned char key[] = { 0xa1, 0xb9, 0xc8, 0xd7, 0xe0, 0xf3, 0xf2, 0xe4 };
+    uint8_t hmac[32];
+    result[42] = NDN_SIG_TYPE_HMAC_SHA256;
+    hmac_sha256(key, sizeof(key), (const unsigned*)(result + 2), 41, hmac);
+    data = ndn_data_create(&name, &meta, &content, key, sizeof(key));
+    TEST_ASSERT_NOT_NULL(data);
+    TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result) - sizeof(hmac)));
+    TEST_ASSERT(0 == memcmp(data->block.buf + 45, hmac, sizeof(hmac)));
+
+    ndn_shared_block_release(data);
+}
+
+static void test_ndn_data_get_name__valid(void)
+{
+    uint8_t buf[] = {
+	NDN_TLV_DATA, 75,
+	NDN_TLV_NAME, 12,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 1, 'd',
+	NDN_TLV_METAINFO, 9,
+	NDN_TLV_CONTENT_TYPE, 1, NDN_CONTENT_TYPE_BLOB,
+	NDN_TLV_FRESHNESS_PERIOD, 4, 7, 0x10, 0x20, 0x34,
+	NDN_TLV_CONTENT, 9,
+	0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10,
+	NDN_TLV_SIGNATURE_INFO, 3,
+	NDN_TLV_SIGNATURE_TYPE, 1, NDN_SIG_TYPE_DIGEST_SHA256,
+	NDN_TLV_SIGNATURE_VALUE, 32,
+	0xe3, 0x8f, 0x85, 0x5b, 0x51, 0x7f, 0x42, 0xa6, 0x4f, 0x5a, 0x34,
+	0x38, 0x00, 0x0b, 0x2b, 0x34, 0xa5, 0x85, 0x1c, 0xc9, 0x97, 0xf2,
+	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
+    };
+
+    ndn_block_t data = { buf, sizeof(buf) };
+
+    ndn_block_t name;
+    TEST_ASSERT_EQUAL_INT(0, ndn_data_get_name(&data, &name));
+    TEST_ASSERT(0 == memcmp(buf + 2, name.buf, name.len));
+}
+
+static void test_ndn_data_get_metainfo__valid(void)
+{
+    uint8_t buf[] = {
+	NDN_TLV_DATA, 75,
+	NDN_TLV_NAME, 12,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 1, 'd',
+	NDN_TLV_METAINFO, 9,
+	NDN_TLV_CONTENT_TYPE, 1, NDN_CONTENT_TYPE_BLOB,
+	NDN_TLV_FRESHNESS_PERIOD, 4, 7, 0x10, 0x20, 0x34,
+	NDN_TLV_CONTENT, 9,
+	0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10,
+	NDN_TLV_SIGNATURE_INFO, 3,
+	NDN_TLV_SIGNATURE_TYPE, 1, NDN_SIG_TYPE_DIGEST_SHA256,
+	NDN_TLV_SIGNATURE_VALUE, 32,
+	0xe3, 0x8f, 0x85, 0x5b, 0x51, 0x7f, 0x42, 0xa6, 0x4f, 0x5a, 0x34,
+	0x38, 0x00, 0x0b, 0x2b, 0x34, 0xa5, 0x85, 0x1c, 0xc9, 0x97, 0xf2,
+	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
+    };
+
+    ndn_block_t data = { buf, sizeof(buf) };
+
+    ndn_metainfo_t meta;
+    TEST_ASSERT_EQUAL_INT(0, ndn_data_get_metainfo(&data, &meta));
+    TEST_ASSERT_EQUAL_INT(NDN_CONTENT_TYPE_BLOB, meta.content_type);
+    TEST_ASSERT_EQUAL_INT(0x7102034, meta.freshness);
+
+    uint8_t buf1[] = {
+	NDN_TLV_DATA, 69,
+	NDN_TLV_NAME, 12,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 1, 'd',
+	NDN_TLV_METAINFO, 3,
+	NDN_TLV_CONTENT_TYPE, 1, NDN_CONTENT_TYPE_BLOB,
+	NDN_TLV_CONTENT, 9,
+	0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10,
+	NDN_TLV_SIGNATURE_INFO, 3,
+	NDN_TLV_SIGNATURE_TYPE, 1, NDN_SIG_TYPE_DIGEST_SHA256,
+	NDN_TLV_SIGNATURE_VALUE, 32,
+	0xe3, 0x8f, 0x85, 0x5b, 0x51, 0x7f, 0x42, 0xa6, 0x4f, 0x5a, 0x34,
+	0x38, 0x00, 0x0b, 0x2b, 0x34, 0xa5, 0x85, 0x1c, 0xc9, 0x97, 0xf2,
+	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
+    };
+
+    ndn_block_t data1 = { buf1, sizeof(buf1) };
+    TEST_ASSERT_EQUAL_INT(0, ndn_data_get_metainfo(&data1, &meta));
+    TEST_ASSERT_EQUAL_INT(NDN_CONTENT_TYPE_BLOB, meta.content_type);
+    TEST_ASSERT_EQUAL_INT(-1, meta.freshness);
+}
+
+static void test_ndn_data_get_content__valid(void)
+{
+    uint8_t buf[] = {
+	NDN_TLV_DATA, 75,
+	NDN_TLV_NAME, 12,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 1, 'd',
+	NDN_TLV_METAINFO, 9,
+	NDN_TLV_CONTENT_TYPE, 1, NDN_CONTENT_TYPE_BLOB,
+	NDN_TLV_FRESHNESS_PERIOD, 4, 7, 0x10, 0x20, 0x34,
+	NDN_TLV_CONTENT, 9,
+	0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10,
+	NDN_TLV_SIGNATURE_INFO, 3,
+	NDN_TLV_SIGNATURE_TYPE, 1, NDN_SIG_TYPE_DIGEST_SHA256,
+	NDN_TLV_SIGNATURE_VALUE, 32,
+	0xe3, 0x8f, 0x85, 0x5b, 0x51, 0x7f, 0x42, 0xa6, 0x4f, 0x5a, 0x34,
+	0x38, 0x00, 0x0b, 0x2b, 0x34, 0xa5, 0x85, 0x1c, 0xc9, 0x97, 0xf2,
+	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
+    };
+
+    ndn_block_t data = { buf, sizeof(buf) };
+
+    ndn_block_t content;
+    uint8_t result[] = {
+	NDN_TLV_CONTENT, 9,
+	0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10,
+    };
+    TEST_ASSERT_EQUAL_INT(0, ndn_data_get_content(&data, &content));
+    TEST_ASSERT(0 == memcmp(result, content.buf, content.len));
+}
+
+static void test_ndn_data_verify_signature__all(void)
+{
+    uint8_t buf[] = {
+	NDN_TLV_DATA, 75,
+	NDN_TLV_NAME, 12,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 1, 'd',
+	NDN_TLV_METAINFO, 9,
+	NDN_TLV_CONTENT_TYPE, 1, NDN_CONTENT_TYPE_BLOB,
+	NDN_TLV_FRESHNESS_PERIOD, 4, 7, 0x10, 0x20, 0x34,
+	NDN_TLV_CONTENT, 9,
+	0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10,
+	NDN_TLV_SIGNATURE_INFO, 3,
+	NDN_TLV_SIGNATURE_TYPE, 1, NDN_SIG_TYPE_DIGEST_SHA256,
+	NDN_TLV_SIGNATURE_VALUE, 32,
+	0xe3, 0x8f, 0x85, 0x5b, 0x51, 0x7f, 0x42, 0xa6, 0x4f, 0x5a, 0x34,
+	0x38, 0x00, 0x0b, 0x2b, 0x34, 0xa5, 0x85, 0x1c, 0xc9, 0x97, 0xf2,
+	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
+    };
+
+    ndn_block_t data = { buf, sizeof(buf) };
+
+    TEST_ASSERT_EQUAL_INT(0, ndn_data_verify_signature(&data, NULL, 0));
+
+    buf[70] = 0x33;
+    TEST_ASSERT_EQUAL_INT(-1, ndn_data_verify_signature(&data, NULL, 0));
+
+    unsigned char key[] = { 0xa1, 0xb9, 0xc8, 0xd7, 0xe0, 0xf3, 0xf2, 0xe4 };
+    buf[42] = NDN_SIG_TYPE_HMAC_SHA256;
+    hmac_sha256(key, sizeof(key), (const unsigned*)(buf + 2), 41, buf + 45);
+
+    TEST_ASSERT_EQUAL_INT(-1, ndn_data_verify_signature(&data, NULL, 0));
+    TEST_ASSERT_EQUAL_INT(0, ndn_data_verify_signature(&data, key, sizeof(key)));
+    buf[32] = 1;
+    TEST_ASSERT_EQUAL_INT(-1, ndn_data_verify_signature(&data, key, sizeof(key)));
+}
+
+Test *tests_ndn_encoding_data_tests(void)
+{
+    EMB_UNIT_TESTFIXTURES(fixtures) {
+        new_TestFixture(test_ndn_data_create__all),
+	new_TestFixture(test_ndn_data_get_name__valid),
+	new_TestFixture(test_ndn_data_get_metainfo__valid),
+	new_TestFixture(test_ndn_data_get_content__valid),
+        new_TestFixture(test_ndn_data_verify_signature__all),
+    };
+
+    EMB_UNIT_TESTCALLER(ndn_encoding_data_tests, NULL, NULL, fixtures);
+
+    return (Test *)&ndn_encoding_data_tests;
+}
+
 void tests_ndn_encoding(void)
 {
     TESTS_RUN(tests_ndn_encoding_block_tests());
     TESTS_RUN(tests_ndn_encoding_name_tests());
     TESTS_RUN(tests_ndn_encoding_interest_tests());
     TESTS_RUN(tests_ndn_encoding_metainfo_tests());
+    TESTS_RUN(tests_ndn_encoding_data_tests());
 }
 /** @} */
