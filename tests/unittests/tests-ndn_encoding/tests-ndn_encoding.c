@@ -32,7 +32,7 @@
 static void set_up(void)
 {
     gnrc_pktbuf_init();
-    genrand_init(0);
+    random_init(0);
 }
 
 /* tests for block.h */

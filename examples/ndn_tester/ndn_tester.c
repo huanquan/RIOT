@@ -21,7 +21,6 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-#include "kernel.h"
 #include "thread.h"
 #include "net/ndn/app.h"
 #include "net/ndn/ndn.h"

@@ -158,7 +158,8 @@ int ndn_metainfo_from_block(const uint8_t* buf, int len, ndn_metainfo_t* meta)
 	    len -= l;
 
 	    // read integer
-	    l = ndn_block_get_integer(buf, (int)num, (uint32_t*)&meta->content_type);
+	    l = ndn_block_get_integer(buf, (int)num,
+				      (uint32_t*)&meta->content_type);
 	    if (l < 0) return -1;
 	    buf += l;
 	    len -= l;
@@ -173,7 +174,8 @@ int ndn_metainfo_from_block(const uint8_t* buf, int len, ndn_metainfo_t* meta)
 	    len -= l;
 
 	    // read integer
-	    l = ndn_block_get_integer(buf, (int)num, (uint32_t*)&meta->freshness);
+	    l = ndn_block_get_integer(buf, (int)num,
+				      (uint32_t*)&meta->freshness);
 	    if (l < 0) return -1;
 	    buf += l;
 	    len -= l;	    

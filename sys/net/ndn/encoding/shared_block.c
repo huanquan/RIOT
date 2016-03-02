@@ -20,7 +20,7 @@
 
 #include "net/ndn/encoding/shared_block.h"
 
-#define ENABLE_DEBUG (1)
+#define ENABLE_DEBUG (0)
 #include "debug.h"
 
 ndn_shared_block_t* ndn_shared_block_create(ndn_block_t* block)
@@ -77,7 +77,6 @@ void ndn_shared_block_release(ndn_shared_block_t* shared)
 {
     assert(shared != NULL);
     int ref = atomic_dec(&shared->ref) - 1;
-    DEBUG("ndn: decrement shared block ref to %d\n", ref);
     if (ref == 0) {
 	/* no one is using this block; free the memory. */
 	DEBUG("ndn: free shared block memory\n");
@@ -90,9 +89,7 @@ void ndn_shared_block_release(ndn_shared_block_t* shared)
 ndn_shared_block_t* ndn_shared_block_copy(ndn_shared_block_t* shared)
 {
     assert(shared != NULL);
-    int ref = atomic_inc(&shared->ref) + 1;
-    DEBUG("ndn: increase shared block ref to %d\n", ref);
-    (void)ref;
+    atomic_inc(&shared->ref);
     return shared;
 }
 

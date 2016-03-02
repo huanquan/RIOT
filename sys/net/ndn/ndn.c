@@ -47,7 +47,8 @@ void _set_timeout(ndn_pit_entry_t* entry, uint32_t us)
     xtimer_set_msg(&entry->timer, us, &entry->timer_msg, thread_getpid());
 }
 
-static void _process_packet(kernel_pid_t face_id, int face_type, gnrc_pktsnip_t *pkt);
+static void _process_packet(kernel_pid_t face_id, int face_type,
+			    gnrc_pktsnip_t *pkt);
 
 /* Main event loop for NDN */
 static void *_event_loop(void *args);
@@ -63,8 +64,9 @@ kernel_pid_t ndn_init(void)
     /* check if thread is already running */
     if (ndn_pid == KERNEL_PID_UNDEF) {
         /* start UDP thread */
-        ndn_pid = thread_create(_stack, sizeof(_stack), GNRC_NDN_PRIO,
-				THREAD_CREATE_STACKTEST, _event_loop, NULL, "ndn");
+        ndn_pid = thread_create(
+	    _stack, sizeof(_stack), GNRC_NDN_PRIO,
+	    THREAD_CREATE_STACKTEST, _event_loop, NULL, "ndn");
     }
     return ndn_pid;
 }
@@ -88,21 +90,22 @@ static void *_event_loop(void *args)
 
     /* start event loop */
     while (1) {
-        DEBUG("ndn: waiting for incoming message\n");
         msg_receive(&msg);
 
         switch (msg.type) {
 	    case MSG_XTIMER:
-		DEBUG("ndn: XTIMER message received from pid %" PRIkernel_pid "\n",
-		      msg.sender_pid);
+		DEBUG("ndn: XTIMER message received from pid %"
+		      PRIkernel_pid "\n", msg.sender_pid);
 		ndn_pit_timeout((msg_t*)msg.content.ptr);
 		break;
 
 	    case NDN_APP_MSG_TYPE_ADD_FACE:
-		DEBUG("ndn: ADD_FACE message received from pid %" PRIkernel_pid "\n",
-		      msg.sender_pid);
-		if (ndn_face_table_add((kernel_pid_t)msg.content.value, NDN_FACE_APP) != 0) {
-		    DEBUG("ndn: failed to add face id %u\n", msg.content.value);
+		DEBUG("ndn: ADD_FACE message received from pid %"
+		      PRIkernel_pid "\n", msg.sender_pid);
+		if (ndn_face_table_add(
+			(kernel_pid_t)msg.content.value, NDN_FACE_APP) != 0) {
+		    DEBUG("ndn: failed to add face id %u\n",
+			  msg.content.value);
 		    reply.content.value = 1;
 		} else {
 		    reply.content.value = 0;  // indicate success
@@ -111,10 +114,12 @@ static void *_event_loop(void *args)
 		break;
 
 	    case NDN_APP_MSG_TYPE_REMOVE_FACE:
-		DEBUG("ndn: REMOVE_FACE message received from pid %" PRIkernel_pid "\n",
-		      msg.sender_pid);
-		if (ndn_face_table_remove((kernel_pid_t)msg.content.value) != 0) {
-		    DEBUG("ndn: failed to remove face id %u\n", msg.content.value);
+		DEBUG("ndn: REMOVE_FACE message received from pid %"
+		      PRIkernel_pid "\n", msg.sender_pid);
+		if (ndn_face_table_remove(
+			(kernel_pid_t)msg.content.value) != 0) {
+		    DEBUG("ndn: failed to remove face id %u\n",
+			  msg.content.value);
 		    reply.content.value = 1;
 		} else {
 		    reply.content.value = 0;  // indicate success
@@ -123,12 +128,14 @@ static void *_event_loop(void *args)
 		break;
 
 	    case NDN_APP_MSG_TYPE_ADD_FIB:
-		DEBUG("ndn: ADD_FIB message received from pid %" PRIkernel_pid "\n",
-		      msg.sender_pid);
-		if (ndn_fib_add((ndn_shared_block_t*)msg.content.ptr, msg.sender_pid,
+		DEBUG("ndn: ADD_FIB message received from pid %"
+		      PRIkernel_pid "\n", msg.sender_pid);
+		if (ndn_fib_add((ndn_shared_block_t*)msg.content.ptr,
+				msg.sender_pid,
 				NDN_FACE_APP) != 0) {
 		    DEBUG("ndn: failed to add fib entry\n");
-		    ndn_shared_block_release((ndn_shared_block_t*)msg.content.ptr);
+		    ndn_shared_block_release(
+			(ndn_shared_block_t*)msg.content.ptr);
 		    reply.content.value = 1;
 		} else {
 		    reply.content.value = 0;  // indicate success
@@ -137,15 +144,15 @@ static void *_event_loop(void *args)
 		break;
 
             case GNRC_NETAPI_MSG_TYPE_RCV:
-                DEBUG("ndn: RCV message received from pid %" PRIkernel_pid "\n",
-		      msg.sender_pid);
+                DEBUG("ndn: RCV message received from pid %"
+		      PRIkernel_pid "\n", msg.sender_pid);
                 _process_packet(msg.sender_pid, NDN_FACE_ETH,
 				(gnrc_pktsnip_t *)msg.content.ptr);
                 break;
 
             case GNRC_NETAPI_MSG_TYPE_SND:
-                DEBUG("ndn: SND message received from pid %" PRIkernel_pid "\n",
-		      msg.sender_pid);
+                DEBUG("ndn: SND message received from pid %"
+		      PRIkernel_pid "\n", msg.sender_pid);
                 _process_packet(msg.sender_pid, NDN_FACE_APP,
 				(gnrc_pktsnip_t *)msg.content.ptr);
                 break;
@@ -260,7 +267,8 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
 	case NDN_FACE_APP:
 	    DEBUG("ndn: send to app face %" PRIkernel_pid "\n", iface);
 	    gnrc_pktbuf_release(pkt);
-	    ndn_shared_block_t* si = ndn_shared_block_copy(pit_entry->shared_pi);
+	    ndn_shared_block_t* si =
+		ndn_shared_block_copy(pit_entry->shared_pi);
 	    _send_interest_to_app(iface, si);
 	    break;
 
@@ -271,7 +279,8 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
     return;
 }
 
-static void _process_packet(kernel_pid_t face_id, int face_type, gnrc_pktsnip_t *pkt)
+static void _process_packet(kernel_pid_t face_id, int face_type,
+			    gnrc_pktsnip_t *pkt)
 {
     if (pkt == NULL) return;
 

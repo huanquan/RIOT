@@ -24,7 +24,8 @@
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
-int ndn_name_component_compare(ndn_name_component_t* lhs, ndn_name_component_t* rhs)
+int ndn_name_component_compare(ndn_name_component_t* lhs,
+			       ndn_name_component_t* rhs)
 {
     if (lhs == NULL || rhs == NULL) return -2;
 
@@ -42,7 +43,8 @@ int ndn_name_component_compare(ndn_name_component_t* lhs, ndn_name_component_t* 
     }
 }
 
-int ndn_name_component_wire_encode(ndn_name_component_t* comp, uint8_t* buf, int len)
+int ndn_name_component_wire_encode(ndn_name_component_t* comp, uint8_t* buf,
+				   int len)
 {
     if (comp == NULL || buf == NULL || comp->len < 0) return -1;
 
@@ -55,8 +57,10 @@ int ndn_name_component_wire_encode(ndn_name_component_t* comp, uint8_t* buf, int
     int tl = ndn_block_total_length(NDN_TLV_NAME_COMPONENT, comp->len);
     if (tl > len) return -1;
 
-    int bytes_written = ndn_block_put_var_number(NDN_TLV_NAME_COMPONENT, buf, len);
-    bytes_written += ndn_block_put_var_number(comp->len, buf + bytes_written, len - bytes_written);
+    int bytes_written =
+	ndn_block_put_var_number(NDN_TLV_NAME_COMPONENT, buf, len);
+    bytes_written += ndn_block_put_var_number(comp->len, buf + bytes_written,
+					      len - bytes_written);
     memcpy(buf + bytes_written, comp->buf, comp->len);
     return tl;
 }
@@ -80,7 +84,8 @@ int ndn_name_compare(ndn_name_t* lhs, ndn_name_t* rhs)
     else return 0;
 }
 
-int ndn_name_get_component(ndn_name_t* name, int pos, ndn_name_component_t* comp)
+int ndn_name_get_component(ndn_name_t* name, int pos,
+			   ndn_name_component_t* comp)
 {
     if (name == NULL || comp == NULL) return -1;
 
@@ -127,10 +132,12 @@ int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len)
     if (tl > len) return -1;
 
     int bytes_written = ndn_block_put_var_number(NDN_TLV_NAME, buf, len);
-    bytes_written += ndn_block_put_var_number(cl, buf + bytes_written, len - bytes_written);
+    bytes_written += ndn_block_put_var_number(cl, buf + bytes_written,
+					      len - bytes_written);
     for (int i = 0; i < name->size; ++i)
     {
-	bytes_written += ndn_name_component_wire_encode(&name->comps[i], buf + bytes_written,
+	bytes_written += ndn_name_component_wire_encode(&name->comps[i],
+							buf + bytes_written,
 							len - bytes_written);
     }
     return tl;
@@ -158,7 +165,7 @@ int ndn_name_get_size_from_block(ndn_block_t* block)
     buf += l;
     len -= l;
 
-    if ((int)num > len)  // entire name must reside in a continuous memory block
+    if ((int)num > len) // entire name must reside in a continuous memory block
 	return -1;
 
     int res = 0;
@@ -188,7 +195,8 @@ int ndn_name_get_size_from_block(ndn_block_t* block)
     return res;
 }
 
-int ndn_name_get_component_from_block(ndn_block_t* block, int pos, ndn_name_component_t* comp)
+int ndn_name_get_component_from_block(ndn_block_t* block, int pos,
+				      ndn_name_component_t* comp)
 {
     if (comp == NULL || pos < 0) return -1;
 
@@ -212,7 +220,7 @@ int ndn_name_get_component_from_block(ndn_block_t* block, int pos, ndn_name_comp
     buf += l;
     len -= l;
 
-    if ((int)num > len)  // entire name must reside in a continuous memory block
+    if ((int)num > len) // entire name must reside in a continuous memory block
 	return -1;
 
     int cnt = 0;

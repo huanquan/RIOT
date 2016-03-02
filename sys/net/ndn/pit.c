@@ -33,7 +33,8 @@ static ndn_pit_entry_t* _pit_entry_add_face(ndn_pit_entry_t* entry,
 					    kernel_pid_t id, int type)
 {
     if (entry->face_list == NULL) {
-	entry->face_list = (_face_list_entry_t*)malloc(sizeof(_face_list_entry_t));
+	entry->face_list =
+	    (_face_list_entry_t*)malloc(sizeof(_face_list_entry_t));
 	if (entry->face_list == NULL) {
 	    DEBUG("ndn: fail to allocate memory for face list\n");
 	    return NULL;
@@ -69,7 +70,8 @@ static ndn_pit_entry_t* _pit_entry_add_face(ndn_pit_entry_t* entry,
     }
 }
 
-ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* block)
+ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
+			     ndn_block_t* block)
 {
     assert(block != NULL);
     assert(block->buf != NULL);
@@ -172,7 +174,8 @@ void ndn_pit_timeout(msg_t *msg)
 			DEBUG("ndn: cannot send timeout message to pid %"
 			      PRIkernel_pid "\n", elem->face_list[i].id);
 			// release the shared ptr here
-			ndn_shared_block_release((ndn_shared_block_t*)timeout.content.ptr);
+			ndn_shared_block_release(
+			    (ndn_shared_block_t*)timeout.content.ptr);
 		    }
 		    // message delivered to app thread, which is responsible
 		    // for releasing the shared ptr
