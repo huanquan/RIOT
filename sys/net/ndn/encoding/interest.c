@@ -95,35 +95,6 @@ gnrc_pktsnip_t* ndn_interest_create_packet(ndn_block_t* block)
     return pkt;
 }
 
-int ndn_interest_get_block(gnrc_pktsnip_t* pkt, ndn_block_t* block)
-{
-    if (block == NULL || pkt == NULL || pkt->type != GNRC_NETTYPE_NDN)
-	return -1;
-
-    const uint8_t* buf = (uint8_t*)pkt->data;
-    int len = pkt->size;
-    uint32_t num;
-    int l;
-
-    /* read interest type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_INTEREST) return -1;
-    buf += l;
-    len -= l;
-
-    /* read interest length and ignore the value */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-
-    if ((int)num > len - l)  // Interest packet is incomplete
-	return -1;
-
-    block->buf = buf - 1;
-    block->len = (int)num + l + 1;
-    return 0;
-}
-
 int ndn_interest_get_name(ndn_block_t* block, ndn_block_t* name)
 {
     if (name == NULL || block == NULL) return -1;

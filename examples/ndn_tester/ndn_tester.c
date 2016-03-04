@@ -26,15 +26,33 @@
 #include "net/ndn/ndn.h"
 #include "net/ndn/encoding/name.h"
 #include "net/ndn/encoding/interest.h"
+#include "net/ndn/encoding/data.h"
 #include "net/ndn/msg_type.h"
 #include "timex.h"
 #include "xtimer.h"
 
+static ndn_app_t* handle = NULL;
+
+static int on_data(ndn_block_t* interest, ndn_block_t* data)
+{
+    (void)interest;
+
+    printf("consumer: run data callback (pid=%"
+	   PRIkernel_pid ")\n", thread_getpid());
+
+    ndn_block_t content;
+    int r = ndn_data_get_content(data, &content);
+    assert(r == 0);
+
+    printf("consumer: %s\n", content.buf + 2);
+    printf("consumer: stop the app\n");
+    return NDN_APP_STOP;
+}
 
 static int on_timeout(ndn_block_t* interest)
 {
     (void)interest;
-    printf("consumer: timeout callback received (pid=%"
+    printf("consumer: run timeout callback (pid=%"
 	   PRIkernel_pid ")\n", thread_getpid());
     printf("consumer: stop the app\n");
     return NDN_APP_STOP;
@@ -45,7 +63,7 @@ static void run_consumer(void)
     printf("consumer: start (pid=%" PRIkernel_pid ")\n",
 	   thread_getpid());
 
-    ndn_app_t *handle = ndn_app_create();
+    handle = ndn_app_create();
     if (handle == NULL) {
 	printf("consumer: cannot create app handle (pid=%"
 	       PRIkernel_pid ")\n", thread_getpid());
@@ -53,20 +71,19 @@ static void run_consumer(void)
     }
 
     /* build interest packet */
-    uint8_t buf[6] = "abcdef";
-    ndn_name_component_t comps[4] = {
+    uint8_t buf[] = "abc";
+    ndn_name_component_t comps[3] = {
 	{ buf, 1 },
 	{ buf + 1, 1 },
-	{ buf + 2, 2 },
-	{ buf + 4, 2 }
+	{ buf + 2, 1 },
     };
-    ndn_name_t name = { 4, comps };  // URI = /a/b/cd/ef
+    ndn_name_t name = { 3, comps };  // URI = /a/b/c
     uint32_t lifetime = 4000;  // 4 sec
 
     printf("consumer: express interest (pid=%"
 	   PRIkernel_pid ")\n", thread_getpid());
     if (ndn_app_express_interest(handle, &name, NULL, lifetime,
-				 NULL, on_timeout) != 0) {
+				 on_data, on_timeout) != 0) {
 	printf("consumer: failed to express interest (pid=%"
 	       PRIkernel_pid ")\n", thread_getpid());
 	ndn_app_destroy(handle);
@@ -87,9 +104,40 @@ static kernel_pid_t producer = KERNEL_PID_UNDEF;
 
 static int on_interest(ndn_block_t* interest)
 {
-    (void)interest;
     printf("producer: interest callback received (pid=%"
 	   PRIkernel_pid ")\n", thread_getpid());
+
+    (void)interest;
+
+    uint8_t buf[] = { 'a', 'b', 'c', 0x11 };
+    ndn_name_component_t comps[] = {
+	{ buf, 1 },
+	{ buf + 1, 1 },
+	{ buf + 2, 1 },
+	{ buf + 3, 1 },
+    };
+    ndn_name_t name = { 4, comps };  // URI = /a/b/c/%11
+
+    ndn_metainfo_t meta = { NDN_CONTENT_TYPE_BLOB, -1 };
+
+    uint8_t con[] = "Hello, world!";
+    ndn_block_t content = { con, sizeof(con) };
+
+    ndn_shared_block_t* sd = ndn_data_create(&name, &meta, &content, NULL, 0);
+    if (sd == NULL) {
+	printf("producer: failed to create data block (pid=%"
+	   PRIkernel_pid ")\n", thread_getpid());
+	return NDN_APP_STOP;
+    }
+    gnrc_pktsnip_t* pkt = ndn_block_create_packet(&sd->block);
+    ndn_shared_block_release(sd);
+    if (pkt == NULL) {
+	printf("producer: failed to create data packet snip (pid=%"
+	   PRIkernel_pid ")\n", thread_getpid());
+	return NDN_APP_STOP;
+    }
+    ndn_app_put_data(handle, pkt);
+
     printf("producer: return to the app\n");
     return NDN_APP_CONTINUE;
 }
@@ -99,7 +147,7 @@ static void run_producer(void)
     printf("producer: start (pid=%" PRIkernel_pid ")\n",
 	   thread_getpid());
 
-    ndn_app_t *handle = ndn_app_create();
+    handle = ndn_app_create();
     if (handle == NULL) {
 	printf("producer: cannot create app handle (pid=%"
 	       PRIkernel_pid ")\n", thread_getpid());

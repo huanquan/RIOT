@@ -14,6 +14,8 @@
  *
  * @author  Wentao Shang <wentaoshang@gmail.com>
  */
+#include "net/gnrc/nettype.h"
+
 #include "net/ndn/encoding/block.h"
 
 #define ENABLE_DEBUG (0)
@@ -119,6 +121,47 @@ int ndn_block_get_integer(const uint8_t* buf, int len, uint32_t* num)
 	*num = (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3];
 	return 4;
     } else return -1;
+}
+
+gnrc_pktsnip_t* ndn_block_create_packet(ndn_block_t* block)
+{
+    if (block == NULL || block->buf == NULL || block->len <= 0) return NULL;
+
+    gnrc_pktsnip_t *pkt = gnrc_pktbuf_add(NULL, (void*)block->buf, block->len,
+					  GNRC_NETTYPE_NDN);
+    if (pkt == NULL) {
+	DEBUG("ndn_encoding: cannot allocate packet snip\n");
+        return NULL;
+    }
+    return pkt;
+}
+
+int ndn_block_from_packet(gnrc_pktsnip_t* pkt, ndn_block_t* block)
+{
+    if (block == NULL || pkt == NULL || pkt->type != GNRC_NETTYPE_NDN)
+	return -1;
+
+    const uint8_t* buf = (uint8_t*)pkt->data;
+    int len = pkt->size;
+    uint32_t num;
+    int l;
+
+    /* read type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l != 1) return -1;
+    buf += l;
+    len -= l;
+
+    /* read length */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+
+    if ((int)num > len - l)  // packet is incomplete
+	return -1;
+
+    block->buf = buf - 1;
+    block->len = (int)num + l + 1;
+    return 0;
 }
 
 /** @} */

@@ -190,8 +190,8 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
 			      gnrc_pktsnip_t *pkt)
 {
     ndn_block_t block;
-    if (ndn_interest_get_block(pkt, &block) < 0) {
-	DEBUG("ndn: cannot get block from interest packet\n");
+    if (ndn_block_from_packet(pkt, &block) < 0) {
+	DEBUG("ndn: cannot get block from packet\n");
 	gnrc_pktbuf_release(pkt);
 	return;
     }
@@ -238,7 +238,6 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
 	gnrc_pktbuf_release(pkt);
 	return;
     }
-    DEBUG("ndn: found matching fib\n");
 
     /* send to the first available interface */
     //TODO: differet forwarding strategies
@@ -279,6 +278,23 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
     return;
 }
 
+static void _process_data(kernel_pid_t face_id, int face_type,
+			  gnrc_pktsnip_t *pkt)
+{
+    (void)face_id;
+    (void)face_type;
+
+    // match data against pit
+    ndn_shared_block_t *sd = ndn_pit_match_data(pkt);
+    if (sd == NULL) {
+	DEBUG("ndn: cannot match data against pit entry\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }	
+    ndn_shared_block_release(sd);
+    gnrc_pktbuf_release(pkt);
+}
+
 static void _process_packet(kernel_pid_t face_id, int face_type,
 			    gnrc_pktsnip_t *pkt)
 {
@@ -306,6 +322,8 @@ static void _process_packet(kernel_pid_t face_id, int face_type,
 	    _process_interest(face_id, face_type, pkt);
 	    break;
         case NDN_TLV_DATA:
+	    _process_data(face_id, face_type, pkt);
+	    break;
         default:
 	    DEBUG("ndn: unknown packet type\n");
 	    gnrc_pktbuf_release(pkt);

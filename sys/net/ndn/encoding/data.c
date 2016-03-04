@@ -22,7 +22,7 @@
 
 #include "net/ndn/encoding/data.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG (1)
 #include "debug.h"
 
 ndn_shared_block_t* ndn_data_create(ndn_name_t* name,
