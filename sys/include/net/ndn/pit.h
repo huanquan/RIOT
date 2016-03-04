@@ -59,8 +59,13 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* b
 
 /**
  * @brief  Removes the expired entry from PIT based on the @p msg pointer.
+ *
+ * @param[in]  msg    Message that identifies the expired PIT entry.
  */
 void ndn_pit_timeout(msg_t *msg);
+
+
+ndn_shared_block_t* ndn_pit_match_data(gnrc_pktsnip_t* pkt);
 
 /**
  * @brief    Initializes the pending interest table.

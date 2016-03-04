@@ -162,6 +162,18 @@ int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
 int ndn_app_register_prefix(ndn_app_t* handle, ndn_name_t* name,
 			    ndn_app_interest_cb_t on_interest);
 
+/**
+ * @brief   Sends a data packet to the NDN thread.
+ *
+ * @param[in]  handle     Handler of the app that calls this function.
+ * @param[in]  pkt        Data packet snip to send.
+ *
+ * @return  0, if success.
+ * @return  -1, if @p handle or @p pkt is NULL.
+ * @return  -1, if failed to send the packet.
+ */
+int ndn_app_put_data(ndn_app_t* handle, gnrc_pktsnip_t* pkt);
+
 #ifdef __cplusplus
 }
 #endif

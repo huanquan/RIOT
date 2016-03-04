@@ -135,6 +135,48 @@ static void test_ndn_block_put_integer__valid(void)
     TEST_ASSERT_EQUAL_INT(0x15, buf[3]);
 }
 
+static void test_ndn_block_from_packet__invalid(void)
+{
+    ndn_block_t block;
+
+    uint8_t buf1[] = {NDN_TLV_INTEREST, 100};
+    gnrc_pktsnip_t* pkt1 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1),
+					   GNRC_NETTYPE_UNDEF);
+    gnrc_pktsnip_t* pkt2 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1),
+					   GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_from_packet(NULL, &block));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_from_packet(pkt1, NULL));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_from_packet(pkt1, &block));
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_from_packet(pkt2, &block));
+
+    uint8_t buf2[]  = {NDN_TLV_SELECTORS, 100, NDN_TLV_NAME, 10};
+    gnrc_pktsnip_t* pkt3 = gnrc_pktbuf_add(NULL, buf2, sizeof(buf2),
+					   GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(-1, ndn_block_from_packet(pkt3, &block));
+}
+
+static void test_ndn_block_from_packet__valid(void)
+{
+    ndn_block_t block;
+
+    uint8_t buf[] = {
+	NDN_TLV_INTEREST, 26,
+	NDN_TLV_NAME, 14,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
+    	NDN_TLV_NONCE, 4,
+	0x76, 0x54, 0x32, 0x10,
+    	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
+    };
+    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf),
+					  GNRC_NETTYPE_NDN);
+    TEST_ASSERT_EQUAL_INT(0, ndn_block_from_packet(pkt, &block));
+    TEST_ASSERT((uint8_t*)pkt->data == block.buf);
+    TEST_ASSERT_EQUAL_INT(gnrc_pkt_len(pkt), block.len);
+}
+
 
 Test *tests_ndn_encoding_block_tests(void)
 {
@@ -148,9 +190,11 @@ Test *tests_ndn_encoding_block_tests(void)
         new_TestFixture(test_ndn_block_total_length__all),
         new_TestFixture(test_ndn_block_put_integer__invalid),
         new_TestFixture(test_ndn_block_put_integer__valid),
+        new_TestFixture(test_ndn_block_from_packet__invalid),
+        new_TestFixture(test_ndn_block_from_packet__valid),
     };
 
-    EMB_UNIT_TESTCALLER(ndn_encoding_block_tests, NULL, NULL, fixtures);
+    EMB_UNIT_TESTCALLER(ndn_encoding_block_tests, set_up, NULL, fixtures);
 
     return (Test *)&ndn_encoding_block_tests;
 }
@@ -665,45 +709,6 @@ static void test_ndn_interest_create_packet__valid(void)
     gnrc_pktbuf_release(pkt);
 }
 
-
-static void test_ndn_interest_get_block__invalid(void)
-{
-    ndn_block_t block;
-
-    uint8_t buf1[] = {NDN_TLV_INTEREST, 100};
-    gnrc_pktsnip_t* pkt1 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1), GNRC_NETTYPE_UNDEF);
-    gnrc_pktsnip_t* pkt2 = gnrc_pktbuf_add(NULL, buf1, sizeof(buf1), GNRC_NETTYPE_NDN);
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(NULL, &block));
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(pkt1, NULL));
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(pkt1, &block));
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(pkt2, &block));
-
-    uint8_t buf2[]  = {NDN_TLV_SELECTORS, 100, NDN_TLV_NAME, 10};
-    gnrc_pktsnip_t* pkt3 = gnrc_pktbuf_add(NULL, buf2, sizeof(buf2), GNRC_NETTYPE_NDN);
-    TEST_ASSERT_EQUAL_INT(-1, ndn_interest_get_block(pkt3, &block));
-}
-
-static void test_ndn_interest_get_block__valid(void)
-{
-    ndn_block_t block;
-
-    uint8_t buf[] = {
-	NDN_TLV_INTEREST, 26,
-	NDN_TLV_NAME, 14,
-	NDN_TLV_NAME_COMPONENT, 1, 'a',
-	NDN_TLV_NAME_COMPONENT, 1, 'b',
-	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
-	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
-    	NDN_TLV_NONCE, 4,
-	0x76, 0x54, 0x32, 0x10,
-    	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
-    };
-    gnrc_pktsnip_t* pkt = gnrc_pktbuf_add(NULL, buf, sizeof(buf), GNRC_NETTYPE_NDN);
-    TEST_ASSERT_EQUAL_INT(0, ndn_interest_get_block(pkt, &block));
-    TEST_ASSERT((uint8_t*)pkt->data == block.buf);
-    TEST_ASSERT_EQUAL_INT(gnrc_pkt_len(pkt), block.len);
-}
-
 static void test_ndn_interest_get_name__invalid(void)
 {
     ndn_block_t name;
@@ -787,8 +792,6 @@ Test *tests_ndn_encoding_interest_tests(void)
         new_TestFixture(test_ndn_interest_create__invalid),
 	new_TestFixture(test_ndn_interest_create__valid),
 	new_TestFixture(test_ndn_interest_create_packet__valid),
-	new_TestFixture(test_ndn_interest_get_block__invalid),
-	new_TestFixture(test_ndn_interest_get_block__valid),
 	new_TestFixture(test_ndn_interest_get_name__invalid),
 	new_TestFixture(test_ndn_interest_get_name__valid),
 	new_TestFixture(test_ndn_interest_get_nonce__valid),

@@ -27,6 +27,7 @@
 #include "net/ndn/encoding/shared_block.h"
 #include "net/ndn/encoding/name.h"
 #include "net/ndn/encoding/interest.h"
+#include "net/ndn/encoding/data.h"
 #include "net/ndn/msg_type.h"
 #include "net/ndn/ndn.h"
 
@@ -90,11 +91,8 @@ static int _notify_consumer_timeout(ndn_app_t* handle, ndn_block_t* pi)
     _consumer_cb_entry_t *entry, *tmp;
     DL_FOREACH_SAFE(handle->_ccb_table, entry, tmp) {
 	ndn_block_t n;
-	if (ndn_interest_get_name(&entry->pi->block, &n) != 0) {
-	    DEBUG("ndn_app: cannot parse name from interest in cb table (pid=%"
-		  PRIkernel_pid ")\n", handle->id);
-	    goto clean;
-	}
+	int r = ndn_interest_get_name(&entry->pi->block, &n);
+	assert(r == 0);
 
 	if (0 != memcmp(pn.buf, n.buf, pn.len < n.len ? pn.len : n.len)) {
 	    // not the same interest name
@@ -103,14 +101,13 @@ static int _notify_consumer_timeout(ndn_app_t* handle, ndn_block_t* pi)
 	}
 
 	// raise timeout callback
-	int r = NDN_APP_CONTINUE;
+	r = NDN_APP_CONTINUE;
 	if (entry->on_timeout != NULL) {
 	    DEBUG("ndn_app: call consumer timeout cb (pid=%"
 		  PRIkernel_pid ")\n", handle->id);
 	    r = entry->on_timeout(&entry->pi->block);
 	}
 
-    clean:
 	DL_DELETE(handle->_ccb_table, entry);
 	ndn_shared_block_release(entry->pi);
 	free(entry);
@@ -131,7 +128,7 @@ static int _notify_producer_interest(ndn_app_t* handle, ndn_block_t* interest)
 	      PRIkernel_pid ")\n", handle->id);
 	return NDN_APP_ERROR;
     }
-    
+
     _producer_cb_entry_t *entry;
     DL_FOREACH(handle->_pcb_table, entry) {
 	if (-2 != ndn_name_compare_block(&entry->prefix->block, &name)) {
@@ -152,6 +149,47 @@ static int _notify_producer_interest(ndn_app_t* handle, ndn_block_t* interest)
     }
 
     return NDN_APP_CONTINUE;    
+}
+
+static int _notify_consumer_data(ndn_app_t* handle, ndn_block_t* data)
+{
+    ndn_block_t name;
+    if (ndn_data_get_name(data, &name) != 0) {
+	DEBUG("ndn_app: cannot parse name from received data (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
+	return NDN_APP_ERROR;
+    }
+    
+    _consumer_cb_entry_t *entry, *tmp;
+    DL_FOREACH_SAFE(handle->_ccb_table, entry, tmp) {
+	ndn_block_t n;
+	int r = ndn_interest_get_name(&entry->pi->block, &n);
+	assert(r == 0);
+
+	// prefix matching
+	r = ndn_name_compare_block(&n, &name);
+	if (r != -2 && r != 0) {
+	    continue;
+	}
+
+	// raise data callback
+	r = NDN_APP_CONTINUE;
+	if (entry->on_data != NULL) {
+	    DEBUG("ndn_app: call consumer data cb (pid=%"
+		  PRIkernel_pid ")\n", handle->id);
+	    r = entry->on_data(&entry->pi->block, data);
+	}
+
+	DL_DELETE(handle->_ccb_table, entry);
+	ndn_shared_block_release(entry->pi);
+	free(entry);
+
+	// stop the app now if the callback returns error or stop
+	if (r != NDN_APP_CONTINUE) return r;
+	// otherwise continue
+    }
+
+    return NDN_APP_CONTINUE;
 }
 
 int ndn_app_run(ndn_app_t* handle)
@@ -205,6 +243,25 @@ int ndn_app_run(ndn_app_t* handle)
 
 		if (ret != NDN_APP_CONTINUE) {
 		    DEBUG("ndn_app: stop app because interest cb returned"
+			  " %s (pid=%" PRIkernel_pid ")\n",
+			  ret == NDN_APP_STOP ? "STOP" : "ERROR",
+			  handle->id);
+		    return ret;
+		}
+		break;
+
+	    case NDN_APP_MSG_TYPE_DATA:
+		DEBUG("ndn_app: DATA msg received from thread %"
+		      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+		      msg.sender_pid, handle->id);
+		ptr = (ndn_shared_block_t*)msg.content.ptr;
+
+		ret = _notify_consumer_data(handle, &ptr->block);
+
+		ndn_shared_block_release(ptr);
+
+		if (ret != NDN_APP_CONTINUE) {
+		    DEBUG("ndn_app: stop app because data cb returned"
 			  " %s (pid=%" PRIkernel_pid ")\n",
 			  ret == NDN_APP_STOP ? "STOP" : "ERROR",
 			  handle->id);
@@ -310,7 +367,7 @@ int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
     }
 
     // create interest packet snip
-    gnrc_pktsnip_t* inst = ndn_interest_create_packet(&si->block);
+    gnrc_pktsnip_t* inst = ndn_block_create_packet(&si->block);
     if (inst == NULL) {
 	DEBUG("ndn_app: cannot create interest packet snip (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
@@ -404,6 +461,22 @@ int ndn_app_register_prefix(ndn_app_t* handle, ndn_name_t* name,
 	DL_DELETE(handle->_pcb_table, entry);
 	ndn_shared_block_release(entry->prefix);
 	free(entry);
+	return -1;
+    }
+
+    return 0;
+}
+
+int ndn_app_put_data(ndn_app_t* handle, gnrc_pktsnip_t* pkt)
+{
+    if (handle == NULL || pkt == NULL) return -1;
+
+    // send packet to NDN thread
+    if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_NDN,
+				   GNRC_NETREG_DEMUX_CTX_ALL, pkt)) {
+	DEBUG("ndn_test: cannot send data to NDN thread (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
+	gnrc_pktbuf_release(pkt);
 	return -1;
     }
 

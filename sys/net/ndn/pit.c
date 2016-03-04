@@ -19,8 +19,10 @@
 
 #include "utlist.h"
 #include "net/ndn/encoding/interest.h"
+#include "net/ndn/encoding/data.h"
 #include "net/ndn/msg_type.h"
 #include "net/ndn/face_table.h"
+#include "net/ndn/netif.h"
 
 #include "net/ndn/pit.h"
 
@@ -184,6 +186,84 @@ void ndn_pit_timeout(msg_t *msg)
 	    _ndn_pit_release(elem);
 	}
     }
+}
+
+static void _send_data_to_app(kernel_pid_t id, ndn_shared_block_t* data)
+{
+    msg_t m;
+    m.type = NDN_APP_MSG_TYPE_DATA;
+    m.content.ptr = (void*)data;
+    if (msg_try_send(&m, id) < 1) {
+	DEBUG("ndn: cannot send data to pid %"
+	      PRIkernel_pid "\n", id);
+	// release the shared ptr here
+	ndn_shared_block_release(data);
+    }
+    DEBUG("ndn: data sent to pid %" PRIkernel_pid "\n", id);
+}
+
+ndn_shared_block_t* ndn_pit_match_data(gnrc_pktsnip_t* pkt)
+{
+    assert(_pit != NULL);
+
+    ndn_block_t block;
+    if (ndn_block_from_packet(pkt, &block) < 0) {
+	DEBUG("ndn: cannot get block from packet\n");
+	return NULL;
+    }
+
+    ndn_block_t name;
+    if (0 != ndn_data_get_name(&block, &name)) {
+	DEBUG("ndn: cannot get data name for pit matching\n");
+	return NULL;
+    }
+
+    ndn_shared_block_t* sd = NULL;
+
+    ndn_pit_entry_t *entry, *tmp;
+    DL_FOREACH_SAFE(_pit, entry, tmp) {
+	ndn_block_t pn;
+	int r = ndn_interest_get_name(&entry->shared_pi->block, &pn);
+	assert(r == 0);
+
+	r = ndn_name_compare_block(&pn, &name);
+	if (r == -2 || r == 0) {
+	    // either pn is a prefix of name, or they are the same
+	    if (sd == NULL)
+		sd = ndn_shared_block_create(&block);
+
+	    DL_DELETE(_pit, entry);
+	    xtimer_remove(&entry->timer);
+
+	    for (int i = 0; i < entry->face_list_size; ++i) {
+		kernel_pid_t iface = entry->face_list[i].id;
+		switch (entry->face_list[i].type) {
+		    case NDN_FACE_ETH:
+			DEBUG("ndn: send to eth face %"
+			      PRIkernel_pid "\n", iface);
+			// make sure we still own a copy of the packet
+			gnrc_pktbuf_hold(pkt, 1);
+			ndn_netif_send(iface, pkt);
+			break;
+
+		    case NDN_FACE_APP:
+			DEBUG("ndn: send to app face %"
+			      PRIkernel_pid "\n", iface);
+			ndn_shared_block_t* d = ndn_shared_block_copy(sd);
+			_send_data_to_app(iface, d);
+			break;
+
+		    default:
+			break;
+		}
+	    }
+
+	    ndn_shared_block_release(entry->shared_pi);
+	    free(entry->face_list);
+	    free(entry);
+	}
+    }
+    return sd;
 }
 
 void ndn_pit_init(void)

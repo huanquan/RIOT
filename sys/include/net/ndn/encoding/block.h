@@ -23,6 +23,7 @@
 #include <inttypes.h>
 #include <sys/types.h>
 
+#include "net/gnrc/pktbuf.h"
 #include "net/ndn/ndn-constants.h"
 
 #ifdef __cplusplus
@@ -123,6 +124,32 @@ int ndn_block_put_integer(uint32_t num, uint8_t* buf, int len);
  * @return  -1, if @p len is not 1, 2, or 4.
  */
 int ndn_block_get_integer(const uint8_t* buf, int len, uint32_t* num);
+
+/**
+ * @brief    Creates a packet snip for the TLV block.
+ *
+ * @details  This function does not check the validity of the block. It simply
+ *           copies the memory into the packet buffer.
+ *
+ * @param[in]  block    TLV block.
+ *
+ * @return  Packet snip containing the TLV block.
+ * @return  NULL, if @p block is NULL or invalid.
+ * @return  NULL, if out of memory of packet buffer.
+ */
+gnrc_pktsnip_t* ndn_block_create_packet(ndn_block_t* block);
+
+/**
+ * @brief  Retrieves the TLV-encoded packet content as a block.
+ *
+ * @param[in]  pkt        Packet snip containing the NDN packet.
+ * @param[out] block      Place to store the TLV block.
+ *
+ * @return  0, if success.
+ * @return  -1, if @p pkt or @p block is NULL.
+ * @return  -1, if @p pkt is invalid or incomplete.
+ */
+int ndn_block_from_packet(gnrc_pktsnip_t* pkt, ndn_block_t* block);
 
 #ifdef __cplusplus
 }
