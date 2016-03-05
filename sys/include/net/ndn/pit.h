@@ -55,7 +55,8 @@ typedef struct ndn_pit_entry {
  *             set (or reset) the timer using the returned entry.
  * @retrun     NULL, if out of memory.
  */
-ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* block);
+ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
+			     ndn_block_t* block);
 
 /**
  * @brief  Removes the expired entry from PIT based on the @p msg pointer.
@@ -64,7 +65,17 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_block_t* b
  */
 void ndn_pit_timeout(msg_t *msg);
 
-
+/**
+ * @brief  Matches data against PIT and forwards the data to all incoming
+ *         faces.
+ *
+ * @param[in]  pkt    Packet snip of the data packet.
+ *
+ * @return  Shared pointer to data (created from the packet), if a match is
+ *          found. This pointer will be used later to insert into CS.
+ * @return  NULL, if no matching PIT entry is found.
+ * @return  NULL, if @p pkt is invalid.
+ */
 ndn_shared_block_t* ndn_pit_match_data(gnrc_pktsnip_t* pkt);
 
 /**
