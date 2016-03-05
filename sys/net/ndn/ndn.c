@@ -24,6 +24,7 @@
 #include "net/ndn/netif.h"
 #include "net/ndn/pit.h"
 #include "net/ndn/fib.h"
+#include "net/ndn/cs.h"
 #include "net/ndn/encoding/interest.h"
 #include "net/ndn/msg_type.h"
 
@@ -60,6 +61,7 @@ kernel_pid_t ndn_init(void)
     ndn_netif_auto_add();
 
     ndn_pit_init();
+    ndn_cs_init();
     
     /* check if thread is already running */
     if (ndn_pid == KERNEL_PID_UNDEF) {
@@ -171,19 +173,19 @@ static void *_event_loop(void *args)
 }
 
 
-static void _send_interest_to_app(kernel_pid_t id,
-				  ndn_shared_block_t* interest)
+static void _send_msg_to_app(kernel_pid_t id, ndn_shared_block_t* block,
+			     int msg_type)
 {
     msg_t m;
-    m.type = NDN_APP_MSG_TYPE_INTEREST;
-    m.content.ptr = (void*)interest;
+    m.type = msg_type;
+    m.content.ptr = (void*)block;
     if (msg_try_send(&m, id) < 1) {
-	DEBUG("ndn: cannot send interest to pid %"
+	DEBUG("ndn: cannot send msg to pid %"
 	      PRIkernel_pid "\n", id);
 	// release the shared ptr here
-	ndn_shared_block_release(interest);
+	ndn_shared_block_release(block);
     }
-    DEBUG("ndn: interest sent to pid %" PRIkernel_pid "\n", id);
+    DEBUG("ndn: msg sent to pid %" PRIkernel_pid "\n", id);
 }
 
 static void _process_interest(kernel_pid_t face_id, int face_type,
@@ -193,6 +195,32 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
     if (ndn_block_from_packet(pkt, &block) < 0) {
 	DEBUG("ndn: cannot get block from packet\n");
 	gnrc_pktbuf_release(pkt);
+	return;
+    }
+
+    ndn_shared_block_t* sd = ndn_cs_match(&block);
+    if (sd != NULL) {
+	DEBUG("ndn: found match in CS\n");
+	gnrc_pktbuf_release(pkt);
+
+	// return data to incoming face
+	switch (face_type) {
+	    case NDN_FACE_ETH:
+		DEBUG("ndn: send to eth face %" PRIkernel_pid "\n", face_id);
+		gnrc_pktsnip_t* pd = ndn_block_create_packet(&sd->block);
+		ndn_netif_send(face_id, pd);
+		break;
+
+	    case NDN_FACE_APP:
+		DEBUG("ndn: send to app face %" PRIkernel_pid "\n", face_id);
+		ndn_shared_block_t* ssd = ndn_shared_block_copy(sd);
+		_send_msg_to_app(face_id, ssd, NDN_APP_MSG_TYPE_DATA);
+	    break;
+
+	    default:
+		break;
+	    }
+	ndn_shared_block_release(sd);
 	return;
     }
 
@@ -268,7 +296,7 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
 	    gnrc_pktbuf_release(pkt);
 	    ndn_shared_block_t* si =
 		ndn_shared_block_copy(pit_entry->shared_pi);
-	    _send_interest_to_app(iface, si);
+	    _send_msg_to_app(iface, si, NDN_APP_MSG_TYPE_INTEREST);
 	    break;
 
 	default:
@@ -290,7 +318,11 @@ static void _process_data(kernel_pid_t face_id, int face_type,
 	DEBUG("ndn: cannot match data against pit entry\n");
 	gnrc_pktbuf_release(pkt);
 	return;
-    }	
+    }
+
+    // try to add data to CS
+    ndn_cs_add(sd);
+
     ndn_shared_block_release(sd);
     gnrc_pktbuf_release(pkt);
 }

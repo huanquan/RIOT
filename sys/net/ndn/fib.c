@@ -22,7 +22,7 @@
 
 #include "net/ndn/fib.h"
 
-#define ENABLE_DEBUG (1)
+#define ENABLE_DEBUG (0)
 #include "debug.h"
 
 static ndn_fib_entry_t *_fib;

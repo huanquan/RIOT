@@ -95,8 +95,6 @@ typedef enum {
 
 #ifdef MODULE_NDN_ENCODING
     GNRC_NETTYPE_NDN,           /**< Protocol is NDN */
-    GNRC_NETTYPE_NDNAPP,        /**< Protocol is NDN, packet is intended for
-                                     applications */
 #endif
 
     /**

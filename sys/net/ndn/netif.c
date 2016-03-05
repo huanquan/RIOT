@@ -25,7 +25,7 @@
 
 #include "net/ndn/netif.h"
 
-#define ENABLE_DEBUG (1)
+#define ENABLE_DEBUG (0)
 #include "debug.h"
 
 static ndn_netif_t _netif_table[GNRC_NETIF_NUMOF];
