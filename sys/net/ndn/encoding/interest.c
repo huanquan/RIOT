@@ -80,21 +80,6 @@ ndn_shared_block_t* ndn_interest_create(ndn_name_t* name, void* selectors,
     return shared;
 }
 
-
-gnrc_pktsnip_t* ndn_interest_create_packet(ndn_block_t* block)
-{
-    if (block == NULL || block->buf == NULL || block->len <= 0) return NULL;
-
-    // Create nonce+lifetime snip.
-    gnrc_pktsnip_t *pkt = gnrc_pktbuf_add(NULL, (void*)block->buf, block->len,
-					  GNRC_NETTYPE_NDN);
-    if (pkt == NULL) {
-	DEBUG("ndn_encoding: cannot allocate packet snip for interest\n");
-        return NULL;
-    }
-    return pkt;
-}
-
 int ndn_interest_get_name(ndn_block_t* block, ndn_block_t* name)
 {
     if (name == NULL || block == NULL) return -1;

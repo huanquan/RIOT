@@ -48,31 +48,205 @@ void _set_timeout(ndn_pit_entry_t* entry, uint32_t us)
     xtimer_set_msg(&entry->timer, us, &entry->timer_msg, thread_getpid());
 }
 
-static void _process_packet(kernel_pid_t face_id, int face_type,
-			    gnrc_pktsnip_t *pkt);
 
-/* Main event loop for NDN */
-static void *_event_loop(void *args);
-
-kernel_pid_t ndn_init(void)
+static void _send_msg_to_app(kernel_pid_t id, ndn_shared_block_t* block,
+			     int msg_type)
 {
-    ndn_face_table_init();
-    ndn_fib_init();
-    ndn_netif_auto_add();
-
-    ndn_pit_init();
-    ndn_cs_init();
-    
-    /* check if thread is already running */
-    if (ndn_pid == KERNEL_PID_UNDEF) {
-        /* start UDP thread */
-        ndn_pid = thread_create(
-	    _stack, sizeof(_stack), GNRC_NDN_PRIO,
-	    THREAD_CREATE_STACKTEST, _event_loop, NULL, "ndn");
+    msg_t m;
+    m.type = msg_type;
+    m.content.ptr = (void*)block;
+    if (msg_try_send(&m, id) < 1) {
+	DEBUG("ndn: cannot send msg to pid %"
+	      PRIkernel_pid "\n", id);
+	// release the shared ptr here
+	ndn_shared_block_release(block);
     }
-    return ndn_pid;
+    DEBUG("ndn: msg sent to pid %" PRIkernel_pid "\n", id);
 }
 
+static void _process_interest(kernel_pid_t face_id, int face_type,
+			      ndn_shared_block_t* si)
+{
+    assert(si != NULL);
+
+    ndn_shared_block_t* sd = ndn_cs_match(&si->block);
+    if (sd != NULL) {
+	ndn_shared_block_release(si);
+
+	// return data to incoming face
+	switch (face_type) {
+	    case NDN_FACE_ETH:
+		DEBUG("ndn: send cached data to eth face %"
+		      PRIkernel_pid "\n", face_id);
+		ndn_netif_send(face_id, &sd->block);
+		ndn_shared_block_release(sd);
+		break;
+
+	    case NDN_FACE_APP:
+		DEBUG("ndn: send cached data to app face %"
+		      PRIkernel_pid "\n", face_id);
+		_send_msg_to_app(face_id, sd, NDN_APP_MSG_TYPE_DATA);
+		break;
+
+	    default:
+		ndn_shared_block_release(sd);
+		break;
+	}
+
+	return;
+    }
+
+    uint32_t lifetime;
+    if (0 != ndn_interest_get_lifetime(&si->block, &lifetime)) {
+	DEBUG("ndn: cannot get lifetime from Interest block\n");
+	ndn_shared_block_release(si);
+	return;
+    }
+
+    if (lifetime > 0x400000) {
+	DEBUG("ndn: interest lifetime in us exceeds 32-bit\n");
+	ndn_shared_block_release(si);
+	return;
+    }
+
+    /* convert lifetime to us */
+    lifetime *= MS_IN_USEC;
+
+    /* add to pit table */
+    ndn_pit_entry_t *pit_entry = ndn_pit_add(face_id, face_type, si);
+    if (pit_entry == NULL) {
+	ndn_shared_block_release(si);
+	return;
+    }
+
+    assert(pit_entry->face_list_size > 0);
+    /* set (or reset) the timer */
+    _set_timeout(pit_entry, lifetime);
+
+    /* check fib */
+    ndn_block_t name;
+    if (ndn_interest_get_name(&si->block, &name) < 0) {
+	DEBUG("ndn: cannot get name from interest block\n");
+	ndn_shared_block_release(si);
+	return;
+    }
+
+    ndn_fib_entry_t* fib_entry = ndn_fib_lookup(&name);
+    if (fib_entry == NULL) {
+	DEBUG("ndn: no route for interest name, drop packet\n");
+	ndn_shared_block_release(si);
+	return;
+    }
+
+    /* send to the first available interface */
+    //TODO: differet forwarding strategies
+    assert(fib_entry->face_list_size > 0);
+    assert(fib_entry->face_list != NULL);
+
+    int index;
+    for (index = 0; index < fib_entry->face_list_size; ++index) {
+	// find the first face that is different from the incoming face
+	if (fib_entry->face_list[index].id != face_id)
+	    break;
+    }
+    if (index == fib_entry->face_list_size) {
+	DEBUG("ndn: no face available for forwarding\n");
+	ndn_shared_block_release(si);
+	return;
+    }
+
+    kernel_pid_t iface = fib_entry->face_list[index].id;
+    switch (fib_entry->face_list[index].type) {
+	case NDN_FACE_ETH:
+	    DEBUG("ndn: send to eth face %" PRIkernel_pid "\n", iface);
+	    ndn_netif_send(iface, &si->block);
+	    ndn_shared_block_release(si);
+	    break;
+
+	case NDN_FACE_APP:
+	    DEBUG("ndn: send to app face %" PRIkernel_pid "\n", iface);
+	    _send_msg_to_app(iface, si, NDN_APP_MSG_TYPE_INTEREST);
+	    break;
+
+	default:
+	    ndn_shared_block_release(si);
+	    break;
+    }
+
+    return;
+}
+
+static void _process_data(kernel_pid_t face_id, int face_type,
+			  ndn_shared_block_t* sd)
+{
+    assert(sd != NULL);
+
+    (void)face_id;
+    (void)face_type;
+
+    // match data against pit
+    if (ndn_pit_match_data(sd) == 0) {
+	// found match in pit
+	// try to add data to CS
+	ndn_cs_add(sd);
+    } // otherwise drop unsolicited data
+
+    ndn_shared_block_release(sd);
+}
+
+static void _process_packet(kernel_pid_t face_id, int face_type,
+			    gnrc_pktsnip_t *pkt)
+{
+    assert(pkt != NULL);
+    assert(pkt->type == GNRC_NETTYPE_NDN);
+
+    ndn_block_t block;
+    if (ndn_block_from_packet(pkt, &block) != 0) {
+	DEBUG("ndn: cannot get block from packet\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }
+
+    uint32_t num;
+    if (ndn_block_get_var_number(block.buf, block.len, &num) < 0) {
+	DEBUG("ndn: cannot read NDN packet type\n");
+	gnrc_pktbuf_release(pkt);
+	return;
+    }
+
+    ndn_shared_block_t* sb = NULL;
+    switch (num) {
+        case NDN_TLV_INTEREST:
+	    sb = ndn_shared_block_create(&block);
+	    gnrc_pktbuf_release(pkt);
+	    if (sb != NULL) {
+		_process_interest(face_id, face_type, sb);
+	    }
+	    else {
+		DEBUG("ndn: cannot create shared block for packet\n");
+	    }
+	    break;
+
+        case NDN_TLV_DATA:
+	    sb = ndn_shared_block_create(&block);
+	    gnrc_pktbuf_release(pkt);
+	    if (sb != NULL) {
+		_process_data(face_id, face_type, sb);
+	    }
+	    else {
+		DEBUG("ndn: cannot create shared block for packet\n");
+	    }
+	    break;
+
+        default:
+	    DEBUG("ndn: unknown NDN packet type\n");
+	    gnrc_pktbuf_release(pkt);
+	    break;
+    }
+    return;
+}
+
+/* Main event loop for NDN */
 static void *_event_loop(void *args)
 {
     msg_t msg, reply, msg_q[GNRC_NDN_MSG_QUEUE_SIZE];
@@ -152,18 +326,28 @@ static void *_event_loop(void *args)
 				(gnrc_pktsnip_t *)msg.content.ptr);
                 break;
 
-            case GNRC_NETAPI_MSG_TYPE_SND:
-                DEBUG("ndn: SND message received from pid %"
+	    case NDN_APP_MSG_TYPE_INTEREST:
+		DEBUG("ndn: INTEREST message received from pid %"
 		      PRIkernel_pid "\n", msg.sender_pid);
-                _process_packet(msg.sender_pid, NDN_FACE_APP,
-				(gnrc_pktsnip_t *)msg.content.ptr);
-                break;
+		_process_interest(msg.sender_pid, NDN_FACE_APP,
+				  (ndn_shared_block_t*)msg.content.ptr);
+		break;
+
+	    case NDN_APP_MSG_TYPE_DATA:
+		DEBUG("ndn: DATA message received from pid %"
+		      PRIkernel_pid "\n", msg.sender_pid);
+		_process_data(msg.sender_pid, NDN_FACE_APP,
+				  (ndn_shared_block_t*)msg.content.ptr);
+		break;
 
             case GNRC_NETAPI_MSG_TYPE_GET:
             case GNRC_NETAPI_MSG_TYPE_SET:
 		reply.content.value = -ENOTSUP;
                 msg_reply(&msg, &reply);
                 break;
+	    case GNRC_NETAPI_MSG_TYPE_SND:
+		DEBUG("ndn: SND message received from pid %"
+		      PRIkernel_pid "\n", msg.sender_pid);
             default:
                 break;
         }
@@ -173,195 +357,23 @@ static void *_event_loop(void *args)
 }
 
 
-static void _send_msg_to_app(kernel_pid_t id, ndn_shared_block_t* block,
-			     int msg_type)
+kernel_pid_t ndn_init(void)
 {
-    msg_t m;
-    m.type = msg_type;
-    m.content.ptr = (void*)block;
-    if (msg_try_send(&m, id) < 1) {
-	DEBUG("ndn: cannot send msg to pid %"
-	      PRIkernel_pid "\n", id);
-	// release the shared ptr here
-	ndn_shared_block_release(block);
+    ndn_face_table_init();
+    ndn_fib_init();
+    ndn_netif_auto_add();
+
+    ndn_pit_init();
+    ndn_cs_init();
+    
+    /* check if thread is already running */
+    if (ndn_pid == KERNEL_PID_UNDEF) {
+        /* start UDP thread */
+        ndn_pid = thread_create(
+	    _stack, sizeof(_stack), GNRC_NDN_PRIO,
+	    THREAD_CREATE_STACKTEST, _event_loop, NULL, "ndn");
     }
-    DEBUG("ndn: msg sent to pid %" PRIkernel_pid "\n", id);
-}
-
-static void _process_interest(kernel_pid_t face_id, int face_type,
-			      gnrc_pktsnip_t *pkt)
-{
-    ndn_block_t block;
-    if (ndn_block_from_packet(pkt, &block) < 0) {
-	DEBUG("ndn: cannot get block from packet\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    ndn_shared_block_t* sd = ndn_cs_match(&block);
-    if (sd != NULL) {
-	DEBUG("ndn: found match in CS\n");
-	gnrc_pktbuf_release(pkt);
-
-	// return data to incoming face
-	switch (face_type) {
-	    case NDN_FACE_ETH:
-		DEBUG("ndn: send to eth face %" PRIkernel_pid "\n", face_id);
-		gnrc_pktsnip_t* pd = ndn_block_create_packet(&sd->block);
-		ndn_netif_send(face_id, pd);
-		break;
-
-	    case NDN_FACE_APP:
-		DEBUG("ndn: send to app face %" PRIkernel_pid "\n", face_id);
-		ndn_shared_block_t* ssd = ndn_shared_block_copy(sd);
-		_send_msg_to_app(face_id, ssd, NDN_APP_MSG_TYPE_DATA);
-	    break;
-
-	    default:
-		break;
-	    }
-	ndn_shared_block_release(sd);
-	return;
-    }
-
-    uint32_t lifetime;
-    if (0 != ndn_interest_get_lifetime(&block, &lifetime)) {
-	DEBUG("ndn: cannot get lifetime from Interest block\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    if (lifetime > 0x400000) {
-	DEBUG("ndn: interest lifetime in us exceeds 32-bit\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    /* convert lifetime to us */
-    lifetime *= MS_IN_USEC;
-
-    /* add to pit table */
-    ndn_pit_entry_t *pit_entry = ndn_pit_add(face_id, face_type, &block);
-    if (pit_entry == NULL) {
-	DEBUG("ndn: cannot add new pit entry\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }	
-
-    assert(pit_entry->face_list_size > 0);
-    /* set (or reset) the timer */
-    _set_timeout(pit_entry, lifetime);
-
-    /* check fib */
-    ndn_block_t name;
-    if (ndn_interest_get_name(&block, &name) < 0) {
-	DEBUG("ndn: cannot get name from interest block\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    ndn_fib_entry_t* fib_entry = ndn_fib_lookup(&name);
-    if (fib_entry == NULL) {
-	DEBUG("ndn: no route for interest name, drop packet\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    /* send to the first available interface */
-    //TODO: differet forwarding strategies
-    assert(fib_entry->face_list_size > 0);
-    assert(fib_entry->face_list != NULL);
-
-    int index;
-    for (index = 0; index < fib_entry->face_list_size; ++index) {
-	// find the first face that is different from the incoming face
-	if (fib_entry->face_list[index].id != face_id)
-	    break;
-    }
-    if (index == fib_entry->face_list_size) {
-	DEBUG("ndn: no face available for forwarding\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    kernel_pid_t iface = fib_entry->face_list[index].id;
-    switch (fib_entry->face_list[index].type) {
-	case NDN_FACE_ETH:
-	    DEBUG("ndn: send to eth face %" PRIkernel_pid "\n", iface);
-	    ndn_netif_send(iface, pkt);
-	    break;
-
-	case NDN_FACE_APP:
-	    DEBUG("ndn: send to app face %" PRIkernel_pid "\n", iface);
-	    gnrc_pktbuf_release(pkt);
-	    ndn_shared_block_t* si =
-		ndn_shared_block_copy(pit_entry->shared_pi);
-	    _send_msg_to_app(iface, si, NDN_APP_MSG_TYPE_INTEREST);
-	    break;
-
-	default:
-	    break;
-    }
-
-    return;
-}
-
-static void _process_data(kernel_pid_t face_id, int face_type,
-			  gnrc_pktsnip_t *pkt)
-{
-    (void)face_id;
-    (void)face_type;
-
-    // match data against pit
-    ndn_shared_block_t *sd = ndn_pit_match_data(pkt);
-    if (sd == NULL) {
-	DEBUG("ndn: cannot match data against pit entry\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    // try to add data to CS
-    ndn_cs_add(sd);
-
-    ndn_shared_block_release(sd);
-    gnrc_pktbuf_release(pkt);
-}
-
-static void _process_packet(kernel_pid_t face_id, int face_type,
-			    gnrc_pktsnip_t *pkt)
-{
-    if (pkt == NULL) return;
-
-    /* ignore any non-NDN packet snip */
-    if (pkt->type != GNRC_NETTYPE_NDN) {
-	DEBUG("ndn: SND command with unknown packet type\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    const uint8_t* buf = (uint8_t*)pkt->data;
-    int len = pkt->size;
-    uint32_t num;
-
-    if (ndn_block_get_var_number(buf, len, &num) < 0) {
-	DEBUG("ndn: cannot read packet type\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
-
-    switch (num) {
-        case NDN_TLV_INTEREST:
-	    _process_interest(face_id, face_type, pkt);
-	    break;
-        case NDN_TLV_DATA:
-	    _process_data(face_id, face_type, pkt);
-	    break;
-        default:
-	    DEBUG("ndn: unknown packet type\n");
-	    gnrc_pktbuf_release(pkt);
-	    break;
-    }
-    return;
+    return ndn_pid;
 }
 
 /** @} */

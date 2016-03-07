@@ -101,10 +101,11 @@ static ndn_netif_t* _ndn_netif_find(kernel_pid_t iface)
     return NULL;
 }
 
-int ndn_netif_send(kernel_pid_t iface, gnrc_pktsnip_t* pkt)
+int ndn_netif_send(kernel_pid_t iface, ndn_block_t* block)
 {
-    assert(pkt != NULL);
-    assert(pkt->type == GNRC_NETTYPE_NDN);
+    assert(block != NULL);
+    assert(block->buf != NULL);
+    assert(block->len > 0);
 
     ndn_netif_t* netif = _ndn_netif_find(iface);
     if (netif == NULL) {
@@ -113,10 +114,16 @@ int ndn_netif_send(kernel_pid_t iface, gnrc_pktsnip_t* pkt)
     }
 
     /* check mtu */
-    if (gnrc_pkt_len(pkt->next) > netif->mtu) {
+    if (block->len > netif->mtu) {
 	DEBUG("ndn: packet size (%u) exceeds device mtu (iface=%"
-	      PRIkernel_pid ")\n", gnrc_pkt_len(pkt->next), iface);
-	gnrc_pktbuf_release(pkt);
+	      PRIkernel_pid ")\n", block->len, iface);
+	return -1;
+    }
+
+    gnrc_pktsnip_t* pkt = ndn_block_create_packet(block);
+    if (pkt == NULL) {
+	DEBUG("ndn: cannot create packet during sending (iface=%"
+	      PRIkernel_pid ")\n", iface);
 	return -1;
     }
 

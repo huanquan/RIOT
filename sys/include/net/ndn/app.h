@@ -166,13 +166,13 @@ int ndn_app_register_prefix(ndn_app_t* handle, ndn_name_t* name,
  * @brief   Sends a data packet to the NDN thread.
  *
  * @param[in]  handle     Handler of the app that calls this function.
- * @param[in]  pkt        Data packet snip to send.
+ * @param[in]  sd         Shared TLV block of the data to send.
  *
  * @return  0, if success.
- * @return  -1, if @p handle or @p pkt is NULL.
+ * @return  -1, if @p handle or @p sd is NULL.
  * @return  -1, if failed to send the packet.
  */
-int ndn_app_put_data(ndn_app_t* handle, gnrc_pktsnip_t* pkt);
+int ndn_app_put_data(ndn_app_t* handle, ndn_shared_block_t* sd);
 
 #ifdef __cplusplus
 }
