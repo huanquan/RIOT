@@ -73,14 +73,14 @@ static ndn_pit_entry_t* _pit_entry_add_face(ndn_pit_entry_t* entry,
 }
 
 ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
-			     ndn_block_t* block)
+			     ndn_shared_block_t* si)
 {
-    assert(block != NULL);
-    assert(block->buf != NULL);
-    assert(block->len > 0);
+    assert(si != NULL);
+    assert(si->block.buf != NULL);
+    assert(si->block.len > 0);
 
     ndn_block_t name;
-    if (0 != ndn_interest_get_name(block, &name)) {
+    if (0 != ndn_interest_get_name(&si->block, &name)) {
 	DEBUG("ndn: cannot get interest name for pit insertion\n");
 	return NULL;
     }
@@ -115,13 +115,7 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
 	return NULL;
     }
 
-    entry->shared_pi = ndn_shared_block_create(block);
-    if (entry->shared_pi == NULL) {
-	free(entry);
-	DEBUG("ndn: cannot allocate buffer for shared block in pit\n");
-	return NULL;
-    }
-
+    entry->shared_pi = ndn_shared_block_copy(si);
     entry->prev = entry->next = NULL;
     entry->face_list = NULL;
     entry->face_list_size = 0;
@@ -202,24 +196,18 @@ static void _send_data_to_app(kernel_pid_t id, ndn_shared_block_t* data)
     DEBUG("ndn: data sent to pid %" PRIkernel_pid "\n", id);
 }
 
-ndn_shared_block_t* ndn_pit_match_data(gnrc_pktsnip_t* pkt)
+int ndn_pit_match_data(ndn_shared_block_t* sd)
 {
     assert(_pit != NULL);
-
-    ndn_block_t block;
-    if (ndn_block_from_packet(pkt, &block) < 0) {
-	DEBUG("ndn: cannot get block from packet\n");
-	return NULL;
-    }
+    assert(sd != NULL);
 
     ndn_block_t name;
-    if (0 != ndn_data_get_name(&block, &name)) {
+    if (0 != ndn_data_get_name(&sd->block, &name)) {
 	DEBUG("ndn: cannot get data name for pit matching\n");
-	return NULL;
+	return -1;
     }
 
-    ndn_shared_block_t* sd = NULL;
-
+    int found = -1;
     ndn_pit_entry_t *entry, *tmp;
     DL_FOREACH_SAFE(_pit, entry, tmp) {
 	ndn_block_t pn;
@@ -229,8 +217,7 @@ ndn_shared_block_t* ndn_pit_match_data(gnrc_pktsnip_t* pkt)
 	r = ndn_name_compare_block(&pn, &name);
 	if (r == -2 || r == 0) {
 	    // either pn is a prefix of name, or they are the same
-	    if (sd == NULL)
-		sd = ndn_shared_block_create(&block);
+	    found = 0;
 
 	    DL_DELETE(_pit, entry);
 	    xtimer_remove(&entry->timer);
@@ -241,16 +228,14 @@ ndn_shared_block_t* ndn_pit_match_data(gnrc_pktsnip_t* pkt)
 		    case NDN_FACE_ETH:
 			DEBUG("ndn: send to eth face %"
 			      PRIkernel_pid "\n", iface);
-			// make sure we still own a copy of the packet
-			gnrc_pktbuf_hold(pkt, 1);
-			ndn_netif_send(iface, pkt);
+			ndn_netif_send(iface, &sd->block);
 			break;
 
 		    case NDN_FACE_APP:
 			DEBUG("ndn: send to app face %"
 			      PRIkernel_pid "\n", iface);
-			ndn_shared_block_t* d = ndn_shared_block_copy(sd);
-			_send_data_to_app(iface, d);
+			ndn_shared_block_t* ssd = ndn_shared_block_copy(sd);
+			_send_data_to_app(iface, ssd);
 			break;
 
 		    default:
@@ -263,7 +248,7 @@ ndn_shared_block_t* ndn_pit_match_data(gnrc_pktsnip_t* pkt)
 	    free(entry);
 	}
     }
-    return sd;
+    return found;
 }
 
 void ndn_pit_init(void)

@@ -48,20 +48,6 @@ ndn_shared_block_t* ndn_interest_create(ndn_name_t* name, void* selectors,
 					uint32_t lifetime);
 
 /**
- * @brief    Creates a packet snip for the Interest.
- *
- * @details  This function does not check the validity of the block. It simply
- *           copies the memory into the packet buffer.
- *
- * @param[in]  block    TLV block of the encoded Interest.
- *
- * @return  Packet snip containing the interest.
- * @return  NULL, if @p block is NULL or invalid.
- * @return  NULL, if out of memory of packet buffer.
- */
-gnrc_pktsnip_t* ndn_interest_create_packet(ndn_block_t* block);
-
-/**
  * @brief  Retrieves the TLV-encoded name from an Interest TLV block.
  *
  * @param[in]  block      TLV block containing the Interest packet.

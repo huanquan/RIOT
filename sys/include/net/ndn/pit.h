@@ -49,14 +49,15 @@ typedef struct ndn_pit_entry {
  * 
  * @param[in]  face_id    ID of the incoming face.
  * @param[in]  face_type  Type of the incoming face.
- * @param[in]  block      TLV block of the Interest packet to add.
+ * @param[in]  si         Shared TLV block of the Interest packet to add. Will
+ *                        be "copied" into the new PIT entry.
  *
  * @return     Pointer to the new PIT entry, if success. Caller need to 
  *             set (or reset) the timer using the returned entry.
  * @retrun     NULL, if out of memory.
  */
 ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
-			     ndn_block_t* block);
+			     ndn_shared_block_t* si);
 
 /**
  * @brief  Removes the expired entry from PIT based on the @p msg pointer.
@@ -66,17 +67,17 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
 void ndn_pit_timeout(msg_t *msg);
 
 /**
- * @brief  Matches data against PIT and forwards the data to all incoming
- *         faces.
+ * @brief   Matches data against PIT and forwards the data to all incoming
+ *          faces.
+ * @details This function will not take ownership of @p sd.
  *
- * @param[in]  pkt    Packet snip of the data packet.
+ * @param[in]  sd    Shared block pointer of the data packet.
  *
- * @return  Shared pointer to data (created from the packet), if a match is
- *          found. This pointer will be used later to insert into CS.
- * @return  NULL, if no matching PIT entry is found.
- * @return  NULL, if @p pkt is invalid.
+ * @return  0, if a match is found.
+ * @return  -1, if no matching PIT entry is found.
+ * @return  -1, if @p sd is invalid.
  */
-ndn_shared_block_t* ndn_pit_match_data(gnrc_pktsnip_t* pkt);
+int ndn_pit_match_data(ndn_shared_block_t* sd);
 
 /**
  * @brief    Initializes the pending interest table.

@@ -343,7 +343,8 @@ static int _add_consumer_cb_entry(ndn_app_t* handle, ndn_shared_block_t* si,
     entry->on_data = on_data;
     entry->on_timeout = on_timeout;
 
-    entry->pi = si;  // move semantics
+    //entry->pi = si;  // move semantics
+    entry->pi = ndn_shared_block_copy(si);
 
     DL_PREPEND(handle->_ccb_table, entry);
     DEBUG("ndn_app: add consumer cb entry (pid=%"
@@ -366,33 +367,26 @@ int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
 	return -1;
     }
 
-    // create interest packet snip
-    gnrc_pktsnip_t* inst = ndn_block_create_packet(&si->block);
-    if (inst == NULL) {
-	DEBUG("ndn_app: cannot create interest packet snip (pid=%"
-	      PRIkernel_pid ")\n", handle->id);
-	return -1;
-    }
-
     // add entry to consumer callback table
     if (0 != _add_consumer_cb_entry(handle, si, on_data, on_timeout)) {
 	DEBUG("ndn_app: cannot add consumer cb entry (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
 	ndn_shared_block_release(si);
-	gnrc_pktbuf_release(inst);
 	return -1;
     }
-    // "si" is useless after this point
 
-    // send packet to NDN thread
-    if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_NDN,
-				   GNRC_NETREG_DEMUX_CTX_ALL, inst)) {
-	DEBUG("ndn_test: cannot send interest to NDN thread (pid=%"
+    // send interest to NDN thread
+    msg_t send;
+    send.type = NDN_APP_MSG_TYPE_INTEREST;
+    send.content.ptr = (void*)si;
+    if (msg_try_send(&send, ndn_pid) < 1) {
+	DEBUG("ndn_app: cannot send interest to NDN thread (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
+	ndn_shared_block_release(si);
 	//TODO: remove consumer cb entry
-	gnrc_pktbuf_release(inst);
 	return -1;
     }
+    // NDN thread will own the shared block ptr
 
     return 0;
 }
@@ -467,18 +461,21 @@ int ndn_app_register_prefix(ndn_app_t* handle, ndn_name_t* name,
     return 0;
 }
 
-int ndn_app_put_data(ndn_app_t* handle, gnrc_pktsnip_t* pkt)
+int ndn_app_put_data(ndn_app_t* handle, ndn_shared_block_t* sd)
 {
-    if (handle == NULL || pkt == NULL) return -1;
+    if (handle == NULL || sd == NULL) return -1;
 
-    // send packet to NDN thread
-    if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_NDN,
-				   GNRC_NETREG_DEMUX_CTX_ALL, pkt)) {
-	DEBUG("ndn_test: cannot send data to NDN thread (pid=%"
+    // send data to NDN thread
+    msg_t send;
+    send.type = NDN_APP_MSG_TYPE_DATA;
+    send.content.ptr = (void*)sd;
+    if (msg_try_send(&send, ndn_pid) < 1) {
+	DEBUG("ndn_app: cannot send data to NDN thread (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
-	gnrc_pktbuf_release(pkt);
+	ndn_shared_block_release(sd);
 	return -1;
     }
+    // NDN thread will own the shared block ptr
 
     return 0;
 }

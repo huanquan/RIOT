@@ -21,6 +21,7 @@
 #define NDN_NETIF_H_
 
 #include "kernel_types.h"
+#include "net/ndn/encoding/block.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,14 +46,15 @@ void ndn_netif_auto_add(void);
  * @brief  Sends an NDN packet over the specified network interface.
  *
  * @param[in]  iface    PID of the network interface.
- * @param[in]  pkt      Packet to send.
+ * @param[in]  block    TLV block to send.
  *
  * @return 0, if success.
+ * @return -1, if fails to allocate memory for the packet.
  * @return -1, if the interface with id @p iface does not exist.
- * @return -1, if @p pkt exceeds the MTU of the interface @p iface.
+ * @return -1, if @p block exceeds the MTU of the interface @p iface.
  * @return -1, if fails to send the packet.
  */
-int ndn_netif_send(kernel_pid_t iface, gnrc_pktsnip_t* pkt);
+int ndn_netif_send(kernel_pid_t iface, ndn_block_t* block);
 
 #ifdef __cplusplus
 }

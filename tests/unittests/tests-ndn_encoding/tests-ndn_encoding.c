@@ -679,36 +679,6 @@ static void test_ndn_interest_create__valid(void)
     TEST_ASSERT(0 == memcmp(sb->block.buf + 24, result + 24, 4));
 }
 
-static void test_ndn_interest_create_packet__valid(void)
-{
-    uint8_t result[] = {
-	NDN_TLV_INTEREST, 26,
-	NDN_TLV_NAME, 14,
-	NDN_TLV_NAME_COMPONENT, 1, 'a',
-	NDN_TLV_NAME_COMPONENT, 1, 'b',
-	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
-	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
-    	NDN_TLV_NONCE, 4,
-    	0, 0, 0, 0, /* random values that we don't care */
-    	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
-    };
-    ndn_block_t block;
-    block.buf = result;
-    block.len = sizeof(result);
-
-    gnrc_pktsnip_t* pkt = ndn_interest_create_packet(&block);
-    TEST_ASSERT_NOT_NULL(pkt);
-    TEST_ASSERT_NULL(pkt->next);
-    TEST_ASSERT_EQUAL_INT(GNRC_NETTYPE_NDN, pkt->type);
-    TEST_ASSERT_EQUAL_INT(sizeof(result), pkt->size);
-    TEST_ASSERT_EQUAL_INT(sizeof(result), gnrc_pkt_len(pkt));
-
-    TEST_ASSERT(0 == memcmp((uint8_t*)pkt->data, result, 20));
-    TEST_ASSERT(0 == memcmp((uint8_t*)pkt->data + 24, result + 24, 4));
-
-    gnrc_pktbuf_release(pkt);
-}
-
 static void test_ndn_interest_get_name__invalid(void)
 {
     ndn_block_t name;
@@ -791,7 +761,6 @@ Test *tests_ndn_encoding_interest_tests(void)
     EMB_UNIT_TESTFIXTURES(fixtures) {
         new_TestFixture(test_ndn_interest_create__invalid),
 	new_TestFixture(test_ndn_interest_create__valid),
-	new_TestFixture(test_ndn_interest_create_packet__valid),
 	new_TestFixture(test_ndn_interest_get_name__invalid),
 	new_TestFixture(test_ndn_interest_get_name__valid),
 	new_TestFixture(test_ndn_interest_get_nonce__valid),

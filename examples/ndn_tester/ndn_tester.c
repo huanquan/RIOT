@@ -33,6 +33,8 @@
 
 static ndn_app_t* handle = NULL;
 
+static const unsigned char key[] = { 'd', 'u', 'm', 'm', 'y', 'k', 'e', 'y' };
+
 static int on_data(ndn_block_t* interest, ndn_block_t* data)
 {
     (void)interest;
@@ -45,6 +47,10 @@ static int on_data(ndn_block_t* interest, ndn_block_t* data)
     assert(r == 0);
 
     printf("consumer: %s\n", content.buf + 2);
+
+    r = ndn_data_verify_signature(data, key, sizeof(key));
+    printf("consumer: signature verification %s\n",
+	   r == 0 ? "success" : "failure");
     printf("consumer: stop the app\n");
     return NDN_APP_STOP;
 }
@@ -123,20 +129,19 @@ static int on_interest(ndn_block_t* interest)
     uint8_t con[] = "Hello, world!";
     ndn_block_t content = { con, sizeof(con) };
 
-    ndn_shared_block_t* sd = ndn_data_create(&name, &meta, &content, NULL, 0);
+    ndn_shared_block_t* sd = ndn_data_create(&name, &meta, &content,
+					     key, sizeof(key));
     if (sd == NULL) {
 	printf("producer: failed to create data block (pid=%"
 	   PRIkernel_pid ")\n", thread_getpid());
 	return NDN_APP_STOP;
     }
-    gnrc_pktsnip_t* pkt = ndn_block_create_packet(&sd->block);
-    ndn_shared_block_release(sd);
-    if (pkt == NULL) {
-	printf("producer: failed to create data packet snip (pid=%"
+
+    if (ndn_app_put_data(handle, sd) != 0) {
+	printf("producer: failed to put data (pid=%"
 	   PRIkernel_pid ")\n", thread_getpid());
 	return NDN_APP_STOP;
     }
-    ndn_app_put_data(handle, pkt);
 
     printf("producer: return to the app\n");
     return NDN_APP_CONTINUE;
