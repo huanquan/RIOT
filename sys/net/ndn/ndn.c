@@ -17,6 +17,7 @@
 #include "net/gnrc/netapi.h"
 #include "net/gnrc/netif.h"
 #include "net/gnrc/netreg.h"
+#include "thread.h"
 #include "timex.h"
 #include "xtimer.h"
 
@@ -25,6 +26,8 @@
 #include "net/ndn/pit.h"
 #include "net/ndn/fib.h"
 #include "net/ndn/cs.h"
+#include "net/ndn/ndn-constants.h"
+#include "net/ndn/encoding/name.h"
 #include "net/ndn/encoding/interest.h"
 #include "net/ndn/msg_type.h"
 
@@ -33,6 +36,10 @@
 #define ENABLE_DEBUG (1)
 #include "debug.h"
 
+#define GNRC_NDN_STACK_SIZE        (THREAD_STACKSIZE_DEFAULT)
+#define GNRC_NDN_PRIO              (THREAD_PRIORITY_MAIN - 3)
+#define GNRC_NDN_MSG_QUEUE_SIZE    (8U)
+
 #if ENABLE_DEBUG
 static char _stack[GNRC_NDN_STACK_SIZE + THREAD_EXTRA_STACKSIZE_PRINTF];
 #else
@@ -40,14 +47,6 @@ static char _stack[GNRC_NDN_STACK_SIZE];
 #endif
 
 kernel_pid_t ndn_pid = KERNEL_PID_UNDEF;
-
-/* helper to setup a timer that interrupts the event loop */
-void _set_timeout(ndn_pit_entry_t* entry, uint32_t us)
-{
-    /* set a timer to send a message to ndn thread */
-    xtimer_set_msg(&entry->timer, us, &entry->timer_msg, thread_getpid());
-}
-
 
 static void _send_msg_to_app(kernel_pid_t id, ndn_shared_block_t* block,
 			     int msg_type)
@@ -96,32 +95,11 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
 	return;
     }
 
-    uint32_t lifetime;
-    if (0 != ndn_interest_get_lifetime(&si->block, &lifetime)) {
-	DEBUG("ndn: cannot get lifetime from Interest block\n");
-	ndn_shared_block_release(si);
-	return;
-    }
-
-    if (lifetime > 0x400000) {
-	DEBUG("ndn: interest lifetime in us exceeds 32-bit\n");
-	ndn_shared_block_release(si);
-	return;
-    }
-
-    /* convert lifetime to us */
-    lifetime *= MS_IN_USEC;
-
     /* add to pit table */
-    ndn_pit_entry_t *pit_entry = ndn_pit_add(face_id, face_type, si);
-    if (pit_entry == NULL) {
+    if (ndn_pit_add(face_id, face_type, si) != 0) {
 	ndn_shared_block_release(si);
 	return;
     }
-
-    assert(pit_entry->face_list_size > 0);
-    /* set (or reset) the timer */
-    _set_timeout(pit_entry, lifetime);
 
     /* check fib */
     ndn_block_t name;
@@ -280,8 +258,8 @@ static void *_event_loop(void *args)
 		      PRIkernel_pid "\n", msg.sender_pid);
 		if (ndn_face_table_add(
 			(kernel_pid_t)msg.content.value, NDN_FACE_APP) != 0) {
-		    DEBUG("ndn: failed to add face id %u\n",
-			  msg.content.value);
+		    DEBUG("ndn: failed to add face id %d\n",
+			  (int)msg.content.value);
 		    reply.content.value = 1;
 		} else {
 		    reply.content.value = 0;  // indicate success
@@ -294,8 +272,8 @@ static void *_event_loop(void *args)
 		      PRIkernel_pid "\n", msg.sender_pid);
 		if (ndn_face_table_remove(
 			(kernel_pid_t)msg.content.value) != 0) {
-		    DEBUG("ndn: failed to remove face id %u\n",
-			  msg.content.value);
+		    DEBUG("ndn: failed to remove face id %d\n",
+			  (int)msg.content.value);
 		    reply.content.value = 1;
 		} else {
 		    reply.content.value = 0;  // indicate success

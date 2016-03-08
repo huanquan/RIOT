@@ -23,6 +23,7 @@
 #include "net/ndn/msg_type.h"
 #include "net/ndn/face_table.h"
 #include "net/ndn/netif.h"
+#include "net/ndn/ndn.h"
 
 #include "net/ndn/pit.h"
 
@@ -72,18 +73,29 @@ static ndn_pit_entry_t* _pit_entry_add_face(ndn_pit_entry_t* entry,
     }
 }
 
-ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
-			     ndn_shared_block_t* si)
+int ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_shared_block_t* si)
 {
     assert(si != NULL);
-    assert(si->block.buf != NULL);
-    assert(si->block.len > 0);
 
     ndn_block_t name;
     if (0 != ndn_interest_get_name(&si->block, &name)) {
 	DEBUG("ndn: cannot get interest name for pit insertion\n");
-	return NULL;
+	return -1;
     }
+
+    uint32_t lifetime;
+    if (0 != ndn_interest_get_lifetime(&si->block, &lifetime)) {
+	DEBUG("ndn: cannot get lifetime from Interest block\n");
+	return -1;
+    }
+
+    if (lifetime > 0x400000) {
+	DEBUG("ndn: interest lifetime in us exceeds 32-bit\n");
+	return -1;
+    }
+
+    /* convert lifetime to us */
+    lifetime *= MS_IN_USEC;
 
     // check for interests with the same name and selectors
     ndn_pit_entry_t *entry;
@@ -97,12 +109,14 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
 			(pn.len < name.len ? pn.len : name.len))) {
 	    // Found pit entry with the same name
 	    if (NULL ==  _pit_entry_add_face(entry, face_id, face_type))
-		return NULL;
+		return -1;
 	    else {
 		DEBUG("ndn: add to existing pit entry (face=%"
 		      PRIkernel_pid ")\n", face_id);
-		// caller need to reset timer after this function returns
-		return entry;
+		/* reset timer */
+		xtimer_set_msg(&entry->timer, lifetime, &entry->timer_msg,
+			       ndn_pid);
+		return 0;
 	    }
 	}
 	//TODO: also check selectors
@@ -112,13 +126,21 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
     entry = (ndn_pit_entry_t*)malloc(sizeof(ndn_pit_entry_t));
     if (entry == NULL) {
 	DEBUG("ndn: cannot allocate pit entry\n");
-	return NULL;
+	return -1;
     }
 
     entry->shared_pi = ndn_shared_block_copy(si);
     entry->prev = entry->next = NULL;
     entry->face_list = NULL;
     entry->face_list_size = 0;
+
+    if (NULL == _pit_entry_add_face(entry, face_id, face_type)) {
+	ndn_shared_block_release(entry->shared_pi);
+	free(entry);
+	return -1;
+    }
+
+    DL_PREPEND(_pit, entry);
 
     /* initialize the timer */
     entry->timer.target = entry->timer.long_target = 0;
@@ -127,15 +149,11 @@ ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
     entry->timer_msg.type = MSG_XTIMER;
     entry->timer_msg.content.ptr = (char*)(&entry->timer_msg);
 
-    if (NULL == _pit_entry_add_face(entry, face_id, face_type)) {
-	ndn_shared_block_release(entry->shared_pi);
-	free(entry);
-	return NULL;
-    }
+    /* set a timer to send a message to ndn thread */
+    xtimer_set_msg(&entry->timer, lifetime, &entry->timer_msg, ndn_pid);
 
-    DL_PREPEND(_pit, entry);
     DEBUG("ndn: add new pit entry (face=%" PRIkernel_pid ")\n", face_id);
-    return entry;
+    return 0;
 }
 
 void _ndn_pit_release(ndn_pit_entry_t *entry)

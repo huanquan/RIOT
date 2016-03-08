@@ -45,19 +45,18 @@ typedef struct ndn_pit_entry {
 } ndn_pit_entry_t;
 
 /**
- * @brief      Adds an entry to PIT.
+ * @brief      Adds an Interest to PIT and set (or reset) the PIT entry timer.
  * 
  * @param[in]  face_id    ID of the incoming face.
  * @param[in]  face_type  Type of the incoming face.
  * @param[in]  si         Shared TLV block of the Interest packet to add. Will
  *                        be "copied" into the new PIT entry.
  *
- * @return     Pointer to the new PIT entry, if success. Caller need to 
- *             set (or reset) the timer using the returned entry.
- * @retrun     NULL, if out of memory.
+ * @return     0, if success.
+ * @return     -1, if @p si is invlid.
+ * @retrun     -1, if out of memory.
  */
-ndn_pit_entry_t* ndn_pit_add(kernel_pid_t face_id, int face_type,
-			     ndn_shared_block_t* si);
+int ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_shared_block_t* si);
 
 /**
  * @brief  Removes the expired entry from PIT based on the @p msg pointer.
