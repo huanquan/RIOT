@@ -21,35 +21,9 @@
 #define NDN_H_
 
 #include "kernel_types.h"
-#include "thread.h"
-
-#include "net/ndn/ndn-constants.h"
-#include "net/ndn/encoding/name.h"
-#include "net/ndn/encoding/interest.h"
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-/**
- * @brief   Default stack size to use for the NDN thread
- */
-#ifndef GNRC_NDN_STACK_SIZE
-#define GNRC_NDN_STACK_SIZE        (THREAD_STACKSIZE_DEFAULT)
-#endif
-
-/**
- * @brief   Default priority for the NDN thread
- */
-#ifndef GNRC_NDN_PRIO
-#define GNRC_NDN_PRIO              (THREAD_PRIORITY_MAIN - 3)
-#endif
-
-/**
- * @brief   Default message queue size to use for the NDN thread.
- */
-#ifndef GNRC_NDN_MSG_QUEUE_SIZE
-#define GNRC_NDN_MSG_QUEUE_SIZE    (8U)
 #endif
 
 /**
