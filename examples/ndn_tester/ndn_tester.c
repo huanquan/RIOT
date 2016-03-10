@@ -133,14 +133,16 @@ static int on_interest(ndn_block_t* interest)
 					     key, sizeof(key));
     if (sd == NULL) {
 	printf("producer: failed to create data block (pid=%"
-	   PRIkernel_pid ")\n", thread_getpid());
-	return NDN_APP_STOP;
+	       PRIkernel_pid ")\n", thread_getpid());
+	return NDN_APP_ERROR;
     }
 
+    printf("producer: send data to NDN thread (pid=%"
+	   PRIkernel_pid ")\n", thread_getpid());
     if (ndn_app_put_data(handle, sd) != 0) {
 	printf("producer: failed to put data (pid=%"
 	   PRIkernel_pid ")\n", thread_getpid());
-	return NDN_APP_STOP;
+	return NDN_APP_ERROR;
     }
 
     printf("producer: return to the app\n");
@@ -200,9 +202,10 @@ static void start_producer(void)
     run_producer();
 }
 
+/*
 static void stop_producer(void)
 {
-    /* check if producer is running at all */
+    // check if producer is running at all
     if (producer == KERNEL_PID_UNDEF) {
         printf("producer: not running\n");
         return;
@@ -216,6 +219,7 @@ static void stop_producer(void)
     printf("producer: stop signal sent to pid %" PRIkernel_pid "\n",
 	   producer);
 }
+*/
 
 int ndn_test(int argc, char **argv)
 {
@@ -228,7 +232,7 @@ int ndn_test(int argc, char **argv)
 	run_consumer();
     }
     else if (strcmp(argv[1], "producer") == 0) {
-        if (argc < 3) {
+/*        if (argc < 3) {
             printf("usage: %s producer [start|stop]\n", argv[0]);
             return 1;
         }
@@ -241,6 +245,8 @@ int ndn_test(int argc, char **argv)
         else {
             puts("error: invalid command");
         }
+*/
+	start_producer();
     }
     else {
         puts("error: invalid command");
