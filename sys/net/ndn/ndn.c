@@ -74,8 +74,8 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
 
 	// return data to incoming face
 	switch (face_type) {
-	    case NDN_FACE_ETH:
-		DEBUG("ndn: send cached data to eth face %"
+	    case NDN_FACE_NETDEV:
+		DEBUG("ndn: send cached data to netdev face %"
 		      PRIkernel_pid "\n", face_id);
 		ndn_netif_send(face_id, &sd->block);
 		ndn_shared_block_release(sd);
@@ -135,8 +135,8 @@ static void _process_interest(kernel_pid_t face_id, int face_type,
 
     kernel_pid_t iface = fib_entry->face_list[index].id;
     switch (fib_entry->face_list[index].type) {
-	case NDN_FACE_ETH:
-	    DEBUG("ndn: send to eth face %" PRIkernel_pid "\n", iface);
+	case NDN_FACE_NETDEV:
+	    DEBUG("ndn: send to netdev face %" PRIkernel_pid "\n", iface);
 	    ndn_netif_send(iface, &si->block);
 	    ndn_shared_block_release(si);
 	    break;
@@ -300,7 +300,7 @@ static void *_event_loop(void *args)
             case GNRC_NETAPI_MSG_TYPE_RCV:
                 DEBUG("ndn: RCV message received from pid %"
 		      PRIkernel_pid "\n", msg.sender_pid);
-                _process_packet(msg.sender_pid, NDN_FACE_ETH,
+                _process_packet(msg.sender_pid, NDN_FACE_NETDEV,
 				(gnrc_pktsnip_t *)msg.content.ptr);
                 break;
 

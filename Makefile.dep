@@ -308,6 +308,7 @@ endif
 
 ifneq (,$(filter ndn,$(USEMODULE)))
     USEMODULE += ndn_encoding
+    USEMODULE += gnrc
     USEMODULE += xtimer
 endif
 

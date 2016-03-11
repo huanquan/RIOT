@@ -45,9 +45,9 @@ typedef struct ndn_face_entry {
 } ndn_face_entry_t;
 
 enum {
-    NDN_FACE_UNDEF, // undefined face
-    NDN_FACE_APP,   // local app face
-    NDN_FACE_ETH,   // ethernet face
+    NDN_FACE_UNDEF,  // undefined face
+    NDN_FACE_APP,    // local app face
+    NDN_FACE_NETDEV, // net device face
 };
 
 /**

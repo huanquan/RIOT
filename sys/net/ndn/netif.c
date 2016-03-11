@@ -48,44 +48,45 @@ void ndn_netif_auto_add(void)
 
     for (int i = 0; i < GNRC_NETIF_NUMOF; ++i) {
 	kernel_pid_t iface = ifs[i];
+	gnrc_nettype_t proto;
 
-	/* get device type */
-	if ((gnrc_netapi_get(iface, NETOPT_DEVICE_TYPE, 0,
-			     &_netif_table[i].dev_type,
-			     sizeof(uint16_t)) < 0)) {
-	    DEBUG("ndn: cannot get device type (pid=%"
-		  PRIkernel_pid ")\n", iface);
-	    continue;
-	}
-
-	/* get device mtu */
-	if ((gnrc_netapi_get(iface, NETOPT_MAX_PACKET_SIZE, 0,
-			     &_netif_table[i].mtu,
-			     sizeof(uint16_t)) < 0)) {
+	// get device mtu
+	if (gnrc_netapi_get(iface, NETOPT_MAX_PACKET_SIZE, 0,
+			    &_netif_table[i].mtu,
+			    sizeof(uint16_t)) < 0) {
 	    DEBUG("ndn: cannot get device mtu (pid=%"
 		  PRIkernel_pid ")\n", iface);
 	    continue;
 	}
-	
-	if (_netif_table[i].dev_type == NETDEV2_TYPE_ETHERNET) {
-	    _netif_table[i].iface = iface;
-	    if (ndn_face_table_add(iface, NDN_FACE_ETH) == 0) {
-		DEBUG("ndn: add ethernet device (pid=%"
-		      PRIkernel_pid ") into face table\n", iface);
-		// add default route for this face
-		uint8_t buf[] = { NDN_TLV_NAME, 0 };
-		ndn_block_t empty = { buf, sizeof(buf) }; // URI = /
-		ndn_shared_block_t* shared = ndn_shared_block_create(&empty);
-		if (shared != NULL
-		    && ndn_fib_add(shared, iface, NDN_FACE_ETH) == 0) {
-		    DEBUG("ndn: default route added for ethernet device\n");
-		}
+
+	// set device net proto to NDN
+	if (gnrc_netapi_get(iface, NETOPT_PROTO, 0,
+			    &proto, sizeof(proto)) == sizeof(proto)) {
+	    // this device supports PROTO option
+	    if (proto != GNRC_NETTYPE_NDN) {
+		proto = GNRC_NETTYPE_NDN;
+		gnrc_netapi_set(iface, NETOPT_PROTO, 0,
+				&proto, sizeof(proto));
 	    }
-	    else {
-		DEBUG("ndn: failed to add ethernet device (pid=%"
-		      PRIkernel_pid ") into face table\n", iface);
+	}
+
+	_netif_table[i].iface = iface;
+	if (ndn_face_table_add(iface, NDN_FACE_NETDEV) == 0) {
+	    DEBUG("ndn: add network device (pid=%"
+		  PRIkernel_pid ") into face table\n", iface);
+	    // add default route for this face
+	    uint8_t buf[] = { NDN_TLV_NAME, 0 };
+	    ndn_block_t empty = { buf, sizeof(buf) }; // URI = /
+	    ndn_shared_block_t* shared = ndn_shared_block_create(&empty);
+	    if (shared != NULL
+		&& ndn_fib_add(shared, iface, NDN_FACE_NETDEV) == 0) {
+		DEBUG("ndn: default route added for network device\n");
 	    }
-	} /* ignore other types of devices for now */
+	}
+	else {
+	    DEBUG("ndn: failed to add network device (pid=%"
+		  PRIkernel_pid ") into face table\n", iface);
+	}
     }
 }
 
