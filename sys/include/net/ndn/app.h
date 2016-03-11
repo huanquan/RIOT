@@ -21,6 +21,7 @@
 #define NDN_APP_H_
 
 #include "kernel_types.h"
+#include "xtimer.h"
 #include "net/ndn/encoding/shared_block.h"
 #include "net/ndn/encoding/name.h"
 #include "net/gnrc/pktbuf.h"
@@ -65,9 +66,9 @@ typedef int (*ndn_app_error_cb_t)(int error);
 typedef struct _consumer_cb_entry {
     struct _consumer_cb_entry *prev;
     struct _consumer_cb_entry *next;
-    ndn_shared_block_t* pi;             /**< expressed interest */
-    ndn_app_data_cb_t  on_data;         /**< handler for the on_data event */
-    ndn_app_timeout_cb_t  on_timeout;   /**< handler for the on_timeout event */
+    ndn_shared_block_t* pi;          /**< expressed interest */
+    ndn_app_data_cb_t on_data;       /**< handler for the on_data event */
+    ndn_app_timeout_cb_t on_timeout; /**< handler for the on_timeout event */
 } _consumer_cb_entry_t;
 
 /**
@@ -76,13 +77,30 @@ typedef struct _consumer_cb_entry {
 typedef struct _producer_cb_entry {
     struct _producer_cb_entry *prev;
     struct _producer_cb_entry *next;
-    ndn_shared_block_t* prefix;          /**< registered prefix */
-    ndn_app_interest_cb_t  on_interest;  /**< handler for the on_interest event */
+    ndn_shared_block_t* prefix;        /**< registered prefix */
+    ndn_app_interest_cb_t on_interest; /**< handler for the on_interest event */
 } _producer_cb_entry_t;
 
 
+/**
+ * @brief  Type for the scheduler callback.
+ */
+typedef int (*ndn_app_sched_cb_t)(void* context);
 
-#define NDN_APP_MSG_QUEUE_SIZE  (8)
+/**
+ * @brief  Type for the scheduler callback table entry.
+ */
+typedef struct _sched_cb_entry {
+    struct _sched_cb_entry *prev;
+    struct _sched_cb_entry *next;
+    ndn_app_sched_cb_t cb;
+    void* context;
+    xtimer_t timer;
+    msg_t timer_msg;
+} _sched_cb_entry_t;
+
+
+#define NDN_APP_MSG_QUEUE_SIZE  (16)
 
 /**
  * @brief   Type to represent an NDN app handle and its associated context.
@@ -93,6 +111,7 @@ typedef struct _producer_cb_entry {
 typedef struct ndn_app {
     kernel_pid_t id;    /**< pid of the app thread */
     msg_t _msg_queue[NDN_APP_MSG_QUEUE_SIZE];  /**< message queue of the app thread */
+    _sched_cb_entry_t *_scb_table;      /**< scheduler callback table */
     _consumer_cb_entry_t *_ccb_table;   /**< consumer callback table */
     _producer_cb_entry_t *_pcb_table;   /**< producer callback table */
 } ndn_app_t;
@@ -111,8 +130,8 @@ ndn_app_t* ndn_app_create(void);
  * @brief   Runs the event loop with the app handle.
  *
  * @details This function is reentrant and can be called from multiple threads.
- *          However, the same handle cannot be used twice by this function at the
- *          same time.
+ *          However, the same handle cannot be used twice by this function at
+ *          the same time.
  *
  * @param[in]  handle    Handle of the app to run.
  *
@@ -126,7 +145,23 @@ int ndn_app_run(ndn_app_t* handle);
 void ndn_app_destroy(ndn_app_t* handle);
 
 /**
- * @brief   Sends an interest with specified name, selectors, lifetime and callbacks.
+ * @brief   Schedules a callback function to be called in some future time.
+ *
+ * @param[in]  handle    Handler of the app that calls this function.
+ * @param[in]  cb        Callback function to be called in the future.
+ * @param[in]  context   Parameter supplied to the callback.
+ * @param[in]  timeout   Time offset in us, indicating when @p cb is called.
+ *
+ * @return  0, if success.
+ * @return  -1, if @p handle is NULL.
+ * @return  -1, if out of memory when allocating memory for the sched entry.
+ */
+int ndn_app_schedule(ndn_app_t* handle, ndn_app_sched_cb_t cb, void* context,
+		     uint32_t timeout);
+
+/**
+ * @brief   Sends an interest with specified name, selectors, lifetime and
+ *          callbacks.
  *
  * @details This function is reentrant and can be called from multiple threads.
  *
