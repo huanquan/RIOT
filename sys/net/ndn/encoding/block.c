@@ -30,10 +30,13 @@ int ndn_block_get_var_number(const uint8_t* buf, int len, uint32_t* num)
 	*num = val;
 	return 1;
     } else if (val == 253 && len >= 3) {
-	*num = (buf[1] << 8) + buf[2];
+	*num = ((uint32_t)buf[1] << 8) + buf[2];
 	return 3;
     } else if (val == 254 && len >= 5) {
-	*num = (buf[1] << 24) + (buf[2] << 16) + (buf[3] << 8) + buf[4];
+	*num = ((uint32_t)buf[1] << 24)
+	    + ((uint32_t)buf[2] << 16)
+	    + ((uint32_t)buf[3] << 8)
+	    + buf[4];
 	return 5;
     }
     else return -1;  //TODO: support 8-byte var-number.
@@ -115,10 +118,13 @@ int ndn_block_get_integer(const uint8_t* buf, int len, uint32_t* num)
 	*num = buf[0];
 	return 1;
     } else if (len == 2) {
-	*num = (buf[0] << 8) + buf[1];
+	*num = ((uint32_t)buf[0] << 8) + buf[1];
 	return 2;
     } else if (len == 4) {
-	*num = (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3];
+	*num = ((uint32_t)buf[0] << 24)
+	    + ((uint32_t)buf[1] << 16)
+	    + ((uint32_t)buf[2] << 8)
+	    + buf[3];
 	return 4;
     } else return -1;
 }

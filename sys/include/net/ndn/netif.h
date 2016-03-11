@@ -33,7 +33,6 @@ extern "C" {
 typedef struct ndn_netif {
     kernel_pid_t iface;  /**< pid of the interface */
     uint16_t mtu;        /**< mtu of the interface */
-    uint16_t dev_type;   /**< device type */
 } ndn_netif_t;
 
 /**

@@ -243,14 +243,14 @@ int ndn_pit_match_data(ndn_shared_block_t* sd)
 	    for (int i = 0; i < entry->face_list_size; ++i) {
 		kernel_pid_t iface = entry->face_list[i].id;
 		switch (entry->face_list[i].type) {
-		    case NDN_FACE_ETH:
-			DEBUG("ndn: send to eth face %"
+		    case NDN_FACE_NETDEV:
+			DEBUG("ndn: send data to netdev face %"
 			      PRIkernel_pid "\n", iface);
 			ndn_netif_send(iface, &sd->block);
 			break;
 
 		    case NDN_FACE_APP:
-			DEBUG("ndn: send to app face %"
+			DEBUG("ndn: send data to app face %"
 			      PRIkernel_pid "\n", iface);
 			ndn_shared_block_t* ssd = ndn_shared_block_copy(sd);
 			_send_data_to_app(iface, ssd);
