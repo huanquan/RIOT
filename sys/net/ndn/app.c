@@ -52,6 +52,7 @@ ndn_app_t* ndn_app_create(void)
     }
 
     handle->id = thread_getpid();  // set to caller pid
+    handle->_scb_table = NULL;
     handle->_ccb_table = NULL;
     handle->_pcb_table = NULL;
 
@@ -192,11 +193,30 @@ static int _notify_consumer_data(ndn_app_t* handle, ndn_block_t* data)
     return NDN_APP_CONTINUE;
 }
 
+static int _sched_call_cb(ndn_app_t* handle, msg_t* msg)
+{
+    int r = NDN_APP_ERROR;
+
+    _sched_cb_entry_t *entry, *tmp;
+    DL_FOREACH_SAFE(handle->_scb_table, entry, tmp) {
+	if (&entry->timer_msg == msg) {
+	    DEBUG("ndn_app: call scheduled callback (pid=%"
+		  PRIkernel_pid ")\n", handle->id);
+	    DL_DELETE(handle->_scb_table, entry);
+	    r = entry->cb(entry->context);
+	    free(entry);
+	    break;
+	}
+    }
+
+    return r;
+}
+
 int ndn_app_run(ndn_app_t* handle)
 {
     if (handle == NULL) return NDN_APP_ERROR;
 
-    int ret = NDN_APP_STOP;
+    int ret = NDN_APP_CONTINUE;
     ndn_shared_block_t* ptr;
     msg_t msg, reply;
     reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
@@ -212,6 +232,15 @@ int ndn_app_run(ndn_app_t* handle)
 		      msg.sender_pid, handle->id);
 		return NDN_APP_STOP;
 
+	    case MSG_XTIMER:
+		DEBUG("ndn_app: XTIMER msg received from thread %"
+		      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+		      msg.sender_pid, handle->id);
+
+		ret = _sched_call_cb(handle, (msg_t*)msg.content.ptr);
+
+		break;
+
 	    case NDN_APP_MSG_TYPE_TIMEOUT:
 		DEBUG("ndn_app: TIMEOUT msg received from thread %"
 		      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
@@ -222,13 +251,6 @@ int ndn_app_run(ndn_app_t* handle)
 
 		ndn_shared_block_release(ptr);
 
-		if (ret != NDN_APP_CONTINUE) {
-		    DEBUG("ndn_app: stop app because timeout callback returned"
-			  " %s (pid=%" PRIkernel_pid ")\n",
-			  ret == NDN_APP_STOP ? "STOP" : "ERROR",
-			  handle->id);
-		    return ret;
-		}
 		break;
 
 	    case NDN_APP_MSG_TYPE_INTEREST:
@@ -241,13 +263,6 @@ int ndn_app_run(ndn_app_t* handle)
 
 		ndn_shared_block_release(ptr);
 
-		if (ret != NDN_APP_CONTINUE) {
-		    DEBUG("ndn_app: stop app because interest cb returned"
-			  " %s (pid=%" PRIkernel_pid ")\n",
-			  ret == NDN_APP_STOP ? "STOP" : "ERROR",
-			  handle->id);
-		    return ret;
-		}
 		break;
 
 	    case NDN_APP_MSG_TYPE_DATA:
@@ -260,13 +275,6 @@ int ndn_app_run(ndn_app_t* handle)
 
 		ndn_shared_block_release(ptr);
 
-		if (ret != NDN_APP_CONTINUE) {
-		    DEBUG("ndn_app: stop app because data cb returned"
-			  " %s (pid=%" PRIkernel_pid ")\n",
-			  ret == NDN_APP_STOP ? "STOP" : "ERROR",
-			  handle->id);
-		    return ret;
-		}
 		break;
 
 	    case GNRC_NETAPI_MSG_TYPE_GET:
@@ -278,9 +286,29 @@ int ndn_app_run(ndn_app_t* handle)
 		      msg.type, handle->id);
 		break;
 	}
+
+	if (ret != NDN_APP_CONTINUE) {
+	    DEBUG("ndn_app: stop app because callback returned"
+		  " %s (pid=%" PRIkernel_pid ")\n",
+		  ret == NDN_APP_STOP ? "STOP" : "ERROR",
+		  handle->id);
+	    return ret;
+	}
     }
 
     return ret;
+}
+
+static inline void _release_sched_cb_table(ndn_app_t* handle)
+{
+    _sched_cb_entry_t *entry, *tmp;
+    DL_FOREACH_SAFE(handle->_scb_table, entry, tmp) {
+	DEBUG("ndn_app: remove scheduler cb entry (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
+	DL_DELETE(handle->_scb_table, entry);
+	xtimer_remove(&entry->timer);
+	free(entry);
+    }
 }
 
 static inline void _release_consumer_cb_table(ndn_app_t* handle)
@@ -309,6 +337,7 @@ static inline void _release_producer_cb_table(ndn_app_t* handle)
 
 void ndn_app_destroy(ndn_app_t* handle)
 {
+    _release_sched_cb_table(handle);
     _release_consumer_cb_table(handle);
     _release_producer_cb_table(handle);
 
@@ -328,28 +357,69 @@ void ndn_app_destroy(ndn_app_t* handle)
     free(handle);
 }
 
-static int _add_consumer_cb_entry(ndn_app_t* handle, ndn_shared_block_t* si,
-				  ndn_app_data_cb_t on_data,
-				  ndn_app_timeout_cb_t on_timeout)
+static _sched_cb_entry_t*
+_add_sched_cb_entry(ndn_app_t* handle, ndn_app_sched_cb_t cb, void* context)
+{
+    _sched_cb_entry_t* entry =
+	(_sched_cb_entry_t*)malloc(sizeof(_sched_cb_entry_t));
+    if (entry == NULL) {
+	DEBUG("ndn_app: cannot allocate memory for sched cb entry (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
+	return NULL;
+    }
+
+    entry->cb = cb;
+    entry->context = context;
+
+    DL_PREPEND(handle->_scb_table, entry);
+    DEBUG("ndn_app: add sched cb entry (pid=%"
+	  PRIkernel_pid ")\n", handle->id);
+    return entry;
+}
+
+int ndn_app_schedule(ndn_app_t* handle, ndn_app_sched_cb_t cb, void* context,
+		     uint32_t timeout)
+{
+    if (handle == NULL) return -1;
+
+    _sched_cb_entry_t *entry =
+	_add_sched_cb_entry(handle, cb, context);
+    if (entry == NULL) return -1;
+
+    // initialize the timer
+    entry->timer.target = entry->timer.long_target = 0;
+
+    // initialize the msg struct
+    entry->timer_msg.type = MSG_XTIMER;
+    entry->timer_msg.content.ptr = (char*)(&entry->timer_msg);
+
+    // set a timer to send a message to the app thread
+    xtimer_set_msg(&entry->timer, timeout, &entry->timer_msg, handle->id);
+
+    return 0;
+}
+
+static _consumer_cb_entry_t*
+_add_consumer_cb_entry(ndn_app_t* handle, ndn_shared_block_t* si,
+		       ndn_app_data_cb_t on_data,
+		       ndn_app_timeout_cb_t on_timeout)
 {
     _consumer_cb_entry_t *entry =
 	(_consumer_cb_entry_t*)malloc(sizeof(_consumer_cb_entry_t));
     if (entry == NULL) {
 	DEBUG("ndn_app: cannot allocate memory for consumer cb entry (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
-	return -1;
+	return NULL;
     }
 
     entry->on_data = on_data;
     entry->on_timeout = on_timeout;
-
-    //entry->pi = si;  // move semantics
     entry->pi = ndn_shared_block_copy(si);
 
     DL_PREPEND(handle->_ccb_table, entry);
     DEBUG("ndn_app: add consumer cb entry (pid=%"
 	  PRIkernel_pid ")\n", handle->id);
-    return 0;
+    return entry;
 }
 
 int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
@@ -368,9 +438,9 @@ int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
     }
 
     // add entry to consumer callback table
-    if (0 != _add_consumer_cb_entry(handle, si, on_data, on_timeout)) {
-	DEBUG("ndn_app: cannot add consumer cb entry (pid=%"
-	      PRIkernel_pid ")\n", handle->id);
+    _consumer_cb_entry_t *entry
+	= _add_consumer_cb_entry(handle, si, on_data, on_timeout);
+    if (entry == NULL) {
 	ndn_shared_block_release(si);
 	return -1;
     }
@@ -383,7 +453,10 @@ int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
 	DEBUG("ndn_app: cannot send interest to NDN thread (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
 	ndn_shared_block_release(si);
-	//TODO: remove consumer cb entry
+	// remove consumer cb entry
+	DL_DELETE(handle->_ccb_table, entry);
+	ndn_shared_block_release(entry->pi);
+	free(entry);
 	return -1;
     }
     // NDN thread will own the shared block ptr
