@@ -465,6 +465,149 @@ static void test_ndn_name_wire_encode__valid(void)
     TEST_ASSERT(0 == memcmp(em_res, dst, sizeof(em_res)));
 }
 
+static void test_ndn_name_from_uri__invalid(void)
+{
+    TEST_ASSERT_NULL(ndn_name_from_uri(NULL, 0));
+
+    const char* str0 = "";
+    TEST_ASSERT_NULL(ndn_name_from_uri(str0, 0));
+    TEST_ASSERT_NULL(ndn_name_from_uri(str0, -1));
+
+    const char* str1 = "aaa";
+    TEST_ASSERT_NULL(ndn_name_from_uri(str1, strlen(str1)));
+
+    const char* str2 = "//a";
+    TEST_ASSERT_NULL(ndn_name_from_uri(str2, strlen(str2)));
+
+    const char* str3 = "/a//";
+    TEST_ASSERT_NULL(ndn_name_from_uri(str3, strlen(str3)));
+
+    const char* str4 = "/a//b";
+    TEST_ASSERT_NULL(ndn_name_from_uri(str4, strlen(str4)));
+
+    const char* str5 = "/a/%";
+    TEST_ASSERT_NULL(ndn_name_from_uri(str5, strlen(str5)));
+
+    const char* str6 = "/a/%F";
+    TEST_ASSERT_NULL(ndn_name_from_uri(str6, strlen(str6)));
+
+    const char* str7 = "/a/%%";
+    TEST_ASSERT_NULL(ndn_name_from_uri(str7, strlen(str7)));
+
+    const char* str8 = "/a/%TS";
+    TEST_ASSERT_NULL(ndn_name_from_uri(str8, strlen(str8)));
+}
+
+static void test_ndn_name_from_uri__valid(void)
+{
+    ndn_shared_block_t* shared = NULL;
+
+    const char* str0 = "/";
+    uint8_t res0[] = {
+	NDN_TLV_NAME, 0,
+    };
+    shared = ndn_name_from_uri(str0, strlen(str0));
+    TEST_ASSERT_NOT_NULL(shared);
+    TEST_ASSERT_EQUAL_INT(sizeof(res0), shared->block.len);
+    TEST_ASSERT(0 == memcmp(res0, shared->block.buf, sizeof(res0)));
+    ndn_shared_block_release(shared);
+
+    const char* str1 = "/a/b/c";
+    uint8_t res1[] = {
+	NDN_TLV_NAME, 9,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+    };
+    shared = ndn_name_from_uri(str1, strlen(str1));
+    TEST_ASSERT_NOT_NULL(shared);
+    TEST_ASSERT_EQUAL_INT(sizeof(res1), shared->block.len);
+    TEST_ASSERT(0 == memcmp(res1, shared->block.buf, sizeof(res1)));
+    ndn_shared_block_release(shared);
+
+    const char* str2 = "/a/b/c/";
+    uint8_t res2[] = {
+	NDN_TLV_NAME, 9,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+    };
+    shared = ndn_name_from_uri(str2, strlen(str2));
+    TEST_ASSERT_NOT_NULL(shared);
+    TEST_ASSERT_EQUAL_INT(sizeof(res2), shared->block.len);
+    TEST_ASSERT(0 == memcmp(res2, shared->block.buf, sizeof(res2)));
+    ndn_shared_block_release(shared);
+
+    const char* str3 = "/a/b/cd";
+    uint8_t res3[] = {
+	NDN_TLV_NAME, 10,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+    };
+    shared = ndn_name_from_uri(str3, strlen(str3));
+    TEST_ASSERT_NOT_NULL(shared);
+    TEST_ASSERT_EQUAL_INT(sizeof(res3), shared->block.len);
+    TEST_ASSERT(0 == memcmp(res3, shared->block.buf, sizeof(res3)));
+    ndn_shared_block_release(shared);
+
+    const char* str4 = "/a/b/c/%FE%00%02%31";
+    uint8_t res4[] = {
+	NDN_TLV_NAME, 15,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 4, 0xFE, 0x00, 0x02, 0x31,
+    };
+    shared = ndn_name_from_uri(str4, strlen(str4));
+    TEST_ASSERT_NOT_NULL(shared);
+    TEST_ASSERT_EQUAL_INT(sizeof(res4), shared->block.len);
+    TEST_ASSERT(0 == memcmp(res4, shared->block.buf, sizeof(res4)));
+    ndn_shared_block_release(shared);
+
+    const char* str5 = "/a/b/c/FE%00%02aa";
+    uint8_t res5[] = {
+	NDN_TLV_NAME, 17,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 6, 'F', 'E', 0x00, 0x02, 'a', 'a',
+    };
+    shared = ndn_name_from_uri(str5, strlen(str5));
+    TEST_ASSERT_NOT_NULL(shared);
+    TEST_ASSERT_EQUAL_INT(sizeof(res5), shared->block.len);
+    TEST_ASSERT(0 == memcmp(res5, shared->block.buf, sizeof(res5)));
+    ndn_shared_block_release(shared);
+}
+
+static void test_ndn_name_append__all(void)
+{
+    uint8_t name[] = {
+	NDN_TLV_NAME, 9,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+    };
+    uint8_t buf[] = {
+	0xFE, 0x00, 0x02, 0x31,
+    };
+    uint8_t res[] = {
+	NDN_TLV_NAME, 15,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 4, 0xFE, 0x00, 0x02, 0x31,
+    };
+    ndn_block_t nb = { name, sizeof(name) };
+
+    ndn_shared_block_t* shared = ndn_name_append(&nb, buf, sizeof(buf));
+    TEST_ASSERT_NOT_NULL(shared);
+    TEST_ASSERT_EQUAL_INT(sizeof(res), shared->block.len);
+    TEST_ASSERT(0 == memcmp(res, shared->block.buf, sizeof(res)));
+    ndn_shared_block_release(shared);
+
+}
+
 static void test_ndn_name_get_size_from_block__invalid(void)
 {
     uint8_t buf1[] = {NDN_TLV_SELECTORS, 2, 3, 4};
@@ -614,7 +757,10 @@ Test *tests_ndn_encoding_name_tests(void)
 	new_TestFixture(test_ndn_name_total_length__valid),
         new_TestFixture(test_ndn_name_wire_encode__invalid),
 	new_TestFixture(test_ndn_name_wire_encode__valid),
-        new_TestFixture(test_ndn_name_get_size_from_block__invalid),
+        new_TestFixture(test_ndn_name_from_uri__invalid),
+	new_TestFixture(test_ndn_name_from_uri__valid),
+	new_TestFixture(test_ndn_name_append__all),
+	new_TestFixture(test_ndn_name_get_size_from_block__invalid),
 	new_TestFixture(test_ndn_name_get_size_from_block__valid),
         new_TestFixture(test_ndn_name_get_component_from_block__all),
 	new_TestFixture(test_ndn_name_compare_block__valid),

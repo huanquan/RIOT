@@ -21,7 +21,7 @@
 #include "net/ndn/ndn-constants.h"
 #include "net/ndn/encoding/name.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG (1)
 #include "debug.h"
 
 int ndn_name_component_compare(ndn_name_component_t* lhs,
@@ -141,6 +141,191 @@ int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len)
 							len - bytes_written);
     }
     return tl;
+}
+
+static inline int _check_hex(char c)
+{
+    if ((c >= 'a' && c <= 'f') ||
+	(c >= 'A' && c <= 'F') ||
+	(c >= '0' && c <= '9'))
+	return 1;
+    else
+	return 0;
+}
+
+static inline uint8_t _hex_to_num(char c)
+{
+    if (c >= '0' && c <= '9') return (uint8_t)(c - '0');
+    else {
+	switch (c) {
+	    case 'a':
+	    case 'A':
+		return 10;
+
+	    case 'b':
+	    case 'B':
+		return 11;
+
+	    case 'c':
+	    case 'C':
+		return 12;
+
+	    case 'd':
+	    case 'D':
+		return 13;
+
+	    case 'e':
+	    case 'E':
+		return 14;
+
+	    case 'f':
+	    case 'F':
+		return 15;
+
+	    default:
+		break;
+	}
+	return 0;
+    }
+}
+
+ndn_shared_block_t* ndn_name_from_uri(const char* uri, int len)
+{
+    if (uri == NULL || len <= 0) return NULL;
+
+    if (uri[0] != '/') return NULL;  //TODO: support "ndn:" scheme identifier
+
+    // calculate total length & check validity
+    int i = 1;
+    int cl = 0;
+    int cpl = 0;  // length of current component
+    while (i < len) {
+	if (uri[i] == '/') {
+	    // found next slash
+	    if (cpl == 0) return NULL; // empty component
+
+	    cl += ndn_block_total_length(NDN_TLV_NAME_COMPONENT, cpl);
+	    cpl = 0; // clear current component length
+	    ++i; // move past the next slash
+	}
+	else if (uri[i] == '%') {
+	    // check hex-encoded byte
+	    if (i + 2 >= len) return NULL; // incomplete hex encoding
+	    if (_check_hex(uri[i+1]) == 0 || _check_hex(uri[i+2]) == 0)
+		return NULL; // invalid hex encoding
+
+	    ++cpl;
+	    i += 3;
+	}
+	else {
+	    // single byte
+	    ++cpl;
+	    ++i;
+	}
+    }
+
+    if (cpl > 0)  // count last (non-empty) component
+	cl += ndn_block_total_length(NDN_TLV_NAME_COMPONENT, cpl);
+
+    if (cl > 253) return NULL; //TODO: support multi-byte name length
+
+    uint8_t* buf = (uint8_t*)malloc(cl + 2);
+    ndn_block_t name;
+    name.buf = buf;
+    name.len = cl + 2;
+
+    // start encoding
+    buf[0] = NDN_TLV_NAME;
+    buf[1] = (uint8_t)cl;
+    buf += 2;
+
+    // encode each component
+    i = 1;
+    cpl = 0;  // length of current component
+    while (i < len) {
+	if (uri[i] == '/') {
+	    // found next slash
+	    assert(cpl != 0);
+
+	    *buf = NDN_TLV_NAME_COMPONENT;
+	    *(buf + 1) = (uint8_t)cpl;
+
+	    buf += cpl + 2;
+	    cpl = 0; // clear current component length
+	    ++i; // move past the next slash
+	}
+	else if (uri[i] == '%') {
+	    // hex-encoded byte
+	    assert(i + 2 < len);
+
+	    *(buf + 2 + cpl) =
+		(_hex_to_num(uri[i+1]) << 4) + _hex_to_num(uri[i+2]);
+	    ++cpl;
+	    i += 3;
+	}
+	else {
+	    // single byte
+	    *(buf + 2 + cpl) = (uint8_t)uri[i];
+	    ++cpl;
+	    ++i;
+	}
+    }
+
+    if (cpl > 0) {
+	// finish encoding the last (non-empty) component
+	*buf = NDN_TLV_NAME_COMPONENT;
+	*(buf + 1) = (uint8_t)cpl;
+    }
+
+    ndn_shared_block_t* shared = ndn_shared_block_create_by_move(&name);
+    if (shared == NULL) {
+	free((void*)name.buf);
+	return NULL;
+    }
+    return shared;
+}
+
+ndn_shared_block_t* ndn_name_append(ndn_block_t* block, const uint8_t* buf,
+				    int len)
+{
+    if (block == NULL || block->buf == NULL || block->len <= 0 ||
+	buf == NULL || len <= 0)
+	return NULL;
+
+    uint32_t num;
+    int l;
+
+    /* read name type */
+    l = ndn_block_get_var_number(block->buf, block->len, &num);
+    if (l < 0) return NULL;
+    if (num != NDN_TLV_NAME) return NULL;
+
+    /* read name length */
+    l = ndn_block_get_var_number(block->buf + l, block->len - l, &num);
+    if (l < 0) return NULL;
+    l = ndn_block_total_length(NDN_TLV_NAME_COMPONENT, len);
+    if ((int)num + l > 253)
+	return NULL;  //TODO: support multi-byte name length
+
+    ndn_block_t nb;
+    uint8_t* nbuf = (uint8_t*)malloc(block->len + l);
+    if (nbuf == NULL) return NULL;
+    nb.buf = nbuf;
+    nb.len = block->len + l;
+
+    memcpy(nbuf, block->buf, block->len);
+    *(nbuf + 1) += l;
+    nbuf += block->len;
+    *nbuf = NDN_TLV_NAME_COMPONENT;
+    *(nbuf + 1) = len;
+    memcpy(nbuf + 2, buf, len);
+
+    ndn_shared_block_t* shared = ndn_shared_block_create_by_move(&nb);
+    if (shared == NULL) {
+	free((void*)nb.buf);
+	return NULL;
+    }
+    return shared;
 }
 
 int ndn_name_get_size_from_block(ndn_block_t* block)

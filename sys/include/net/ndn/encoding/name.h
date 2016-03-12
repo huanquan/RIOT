@@ -25,6 +25,7 @@
 
 #include "net/ndn/ndn-constants.h"
 #include "net/ndn/encoding/block.h"
+#include "net/ndn/encoding/shared_block.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -134,6 +135,36 @@ int ndn_name_total_length(ndn_name_t* name);
  * @return  -1 if @p name or @p buf is NULL.
  */
 int ndn_name_wire_encode(ndn_name_t* name, uint8_t* buf, int len);
+
+/**
+ * @brief   Creates a TLV-encoded shared name block from a URI string.
+ * @details Caller is responsible for releasing the returned shared block.
+ *
+ * @param[in]   uri    URI string of the name.
+ * @param[in]   len    Length of the URI string.
+ *
+ * @return  Shared block of the encoded name, if success.
+ * @return  NULL, if @p uri is NULL or @p len <= 0.
+ * @return  NULL, if @p uri is invalid.
+ * @return  NULL, if out of memory.
+ */
+ndn_shared_block_t* ndn_name_from_uri(const char* uri, int len);
+
+/**
+ * @brief   Appends a component to the end of a name and creates a new name.
+ * @details Caller is responsible for releasing the returned shared block.
+ *
+ * @param[in]   block   TLV block of the name to append to.
+ * @param[in]   buf     Buffer containing the component to append with.
+ * @param[in]   len     Size of the component.
+ *
+ * @return  Shared block of the new name, if success.
+ * @return  NULL, if @p block or @p buf is NULL, or if @p len <= 0.
+ * @return  NULL, if @p block is invalid.
+ * @return  NULL, if out of memory.
+ */
+ndn_shared_block_t* ndn_name_append(ndn_block_t* block, const uint8_t* buf,
+				    int len);
 
 /**
  * @brief   Gets the number of name components in a TLV-encoded NDN name.
