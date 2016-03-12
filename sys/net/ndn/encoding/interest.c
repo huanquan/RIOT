@@ -25,9 +25,59 @@
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
-
-ndn_shared_block_t* ndn_interest_create(ndn_name_t* name, void* selectors,
+ndn_shared_block_t* ndn_interest_create(ndn_block_t* name, void* selectors,
 					uint32_t lifetime)
+{
+    if (name == NULL || name->buf == NULL || name->len <= 0) return NULL;
+
+    (void)selectors;  //TODO: support selectors.
+
+    // Get length of the lifetime value
+    int lt_len = ndn_block_integer_length(lifetime);
+
+    if (name->len + lt_len + 8 > 253)
+	return NULL;  //TODO: support multi-byte length field.
+
+    ndn_block_t inst;
+    inst.len = 10 + name->len + lt_len;
+    uint8_t* buf = (uint8_t*)malloc(inst.len);
+    if (buf == NULL) {
+	DEBUG("ndn_encoding: cannot allocate memory for interest block\n");
+        return NULL;
+    }
+    inst.buf = buf;
+
+    // Fill in the Interest header and name field.
+    buf[0] = NDN_TLV_INTEREST;
+    buf[1] = inst.len - 2;
+    memcpy(buf + 2, name->buf, name->len);
+    
+    // Fill in the nonce.
+    buf += name->len + 2;
+    uint32_t nonce = random_uint32();
+    buf[0] = NDN_TLV_NONCE;
+    buf[1] = 4;  // Nonce field length
+    buf[2] = (nonce >> 24) & 0xFF;
+    buf[3] = (nonce >> 16) & 0xFF;
+    buf[4] = (nonce >> 8) & 0xFF;
+    buf[5] = nonce & 0xFF;
+
+    // Fill in the lifetime
+    buf[6] = NDN_TLV_INTERESTLIFETIME;
+    buf[7] = lt_len;
+    ndn_block_put_integer(lifetime, buf + 8, buf[7]);
+
+    ndn_shared_block_t* shared = ndn_shared_block_create_by_move(&inst);
+    if (shared == NULL) {
+	free((void*)inst.buf);
+	return NULL;
+    }
+
+    return shared;
+}
+
+ndn_shared_block_t* ndn_interest_create2(ndn_name_t* name, void* selectors,
+					 uint32_t lifetime)
 {
     if (name == NULL) return NULL;
 

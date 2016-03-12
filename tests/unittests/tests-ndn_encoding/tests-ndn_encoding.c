@@ -774,7 +774,40 @@ Test *tests_ndn_encoding_name_tests(void)
 
 /* tests for interest.h */
 
-static void test_ndn_interest_create__invalid(void)
+static void test_ndn_interest_create__all(void)
+{
+    TEST_ASSERT_NULL(ndn_interest_create(NULL, NULL, 4000));
+
+    const char* str = "/a/b/cd/ef";
+    ndn_shared_block_t* sn = ndn_name_from_uri(str, strlen(str));
+    TEST_ASSERT_NOT_NULL(sn);
+
+    uint32_t lifetime = 0x4000;
+
+    uint8_t result[] = {
+	NDN_TLV_INTEREST, 26,
+	NDN_TLV_NAME, 14,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 2, 'c', 'd',
+	NDN_TLV_NAME_COMPONENT, 2, 'e', 'f',
+    	NDN_TLV_NONCE, 4,
+    	0, 0, 0, 0, /* random values that we don't care */
+    	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
+    };
+
+    ndn_shared_block_t* sb = ndn_interest_create(&sn->block, NULL, lifetime);
+    TEST_ASSERT_NOT_NULL(sb);
+    TEST_ASSERT_NOT_NULL(sb->block.buf);
+    TEST_ASSERT_EQUAL_INT(sizeof(result), sb->block.len);
+    TEST_ASSERT(0 == memcmp(sb->block.buf, result, 20));
+    TEST_ASSERT(0 == memcmp(sb->block.buf + 24, result + 24, 4));
+
+    ndn_shared_block_release(sn);
+    ndn_shared_block_release(sb);
+}
+
+static void test_ndn_interest_create2__invalid(void)
 {
     uint8_t buf[4] = "abcd";
     ndn_name_component_t comps[4] = {
@@ -787,13 +820,13 @@ static void test_ndn_interest_create__invalid(void)
     ndn_name_t bad2 = { 1, comps + 2 };
     ndn_name_t bad3 = { 1, comps + 3 };
 
-    TEST_ASSERT_NULL(ndn_interest_create(NULL, NULL, 4000));
-    TEST_ASSERT_NULL(ndn_interest_create(&bad1, NULL, 4000));
-    TEST_ASSERT_NULL(ndn_interest_create(&bad2, NULL, 4000));
-    TEST_ASSERT_NULL(ndn_interest_create(&bad3, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create2(NULL, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create2(&bad1, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create2(&bad2, NULL, 4000));
+    TEST_ASSERT_NULL(ndn_interest_create2(&bad3, NULL, 4000));
 }
 
-static void test_ndn_interest_create__valid(void)
+static void test_ndn_interest_create2__valid(void)
 {
     uint8_t buf[6] = "abcdef";
     ndn_name_component_t comps[4] = {
@@ -817,12 +850,14 @@ static void test_ndn_interest_create__valid(void)
     	NDN_TLV_INTERESTLIFETIME, 2, 0x40, 0,
     };
 
-    ndn_shared_block_t* sb = ndn_interest_create(&name, NULL, lifetime);
+    ndn_shared_block_t* sb = ndn_interest_create2(&name, NULL, lifetime);
     TEST_ASSERT_NOT_NULL(sb);
     TEST_ASSERT_NOT_NULL(sb->block.buf);
     TEST_ASSERT_EQUAL_INT(sizeof(result), sb->block.len);
     TEST_ASSERT(0 == memcmp(sb->block.buf, result, 20));
     TEST_ASSERT(0 == memcmp(sb->block.buf + 24, result + 24, 4));
+
+    ndn_shared_block_release(sb);
 }
 
 static void test_ndn_interest_get_name__invalid(void)
@@ -905,8 +940,9 @@ static void test_ndn_interest_get_lifetime__valid(void)
 Test *tests_ndn_encoding_interest_tests(void)
 {
     EMB_UNIT_TESTFIXTURES(fixtures) {
-        new_TestFixture(test_ndn_interest_create__invalid),
-	new_TestFixture(test_ndn_interest_create__valid),
+        new_TestFixture(test_ndn_interest_create__all),
+        new_TestFixture(test_ndn_interest_create2__invalid),
+	new_TestFixture(test_ndn_interest_create2__valid),
 	new_TestFixture(test_ndn_interest_get_name__invalid),
 	new_TestFixture(test_ndn_interest_get_name__valid),
 	new_TestFixture(test_ndn_interest_get_nonce__valid),
@@ -1072,6 +1108,60 @@ Test *tests_ndn_encoding_metainfo_tests(void)
 
 static void test_ndn_data_create__all(void)
 {
+    const char* str = "/a/b/c/d";
+    ndn_shared_block_t* sn = ndn_name_from_uri(str, strlen(str));
+    TEST_ASSERT_NOT_NULL(sn);
+
+    ndn_metainfo_t meta = { NDN_CONTENT_TYPE_BLOB, 0x7102034 };
+
+    uint8_t con[] = { 0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10 };
+    ndn_block_t content;
+    content.buf = con;
+    content.len = sizeof(con);
+
+    uint8_t result[] = {
+	NDN_TLV_DATA, 75,
+	NDN_TLV_NAME, 12,
+	NDN_TLV_NAME_COMPONENT, 1, 'a',
+	NDN_TLV_NAME_COMPONENT, 1, 'b',
+	NDN_TLV_NAME_COMPONENT, 1, 'c',
+	NDN_TLV_NAME_COMPONENT, 1, 'd',
+	NDN_TLV_METAINFO, 9,
+	NDN_TLV_CONTENT_TYPE, 1, NDN_CONTENT_TYPE_BLOB,
+	NDN_TLV_FRESHNESS_PERIOD, 4, 7, 0x10, 0x20, 0x34,
+	NDN_TLV_CONTENT, 9,
+	0x91, 0x82, 0x73, 0x64, 0x55, 0x44, 0x33, 0x22, 0x10,
+	NDN_TLV_SIGNATURE_INFO, 3,
+	NDN_TLV_SIGNATURE_TYPE, 1, NDN_SIG_TYPE_DIGEST_SHA256,
+	NDN_TLV_SIGNATURE_VALUE, 32,
+	0xe3, 0x8f, 0x85, 0x5b, 0x51, 0x7f, 0x42, 0xa6, 0x4f, 0x5a, 0x34,
+	0x38, 0x00, 0x0b, 0x2b, 0x34, 0xa5, 0x85, 0x1c, 0xc9, 0x97, 0xf2,
+	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
+    };
+
+    ndn_shared_block_t* data = ndn_data_create(&sn->block, &meta, &content,
+					       NULL, 0);
+    TEST_ASSERT_NOT_NULL(data);
+    TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result)));
+
+    ndn_shared_block_release(data);
+
+    unsigned char key[] = { 0xa1, 0xb9, 0xc8, 0xd7, 0xe0, 0xf3, 0xf2, 0xe4 };
+    uint8_t hmac[32];
+    result[42] = NDN_SIG_TYPE_HMAC_SHA256;
+    hmac_sha256(key, sizeof(key), (const unsigned*)(result + 2), 41, hmac);
+    data = ndn_data_create(&sn->block, &meta, &content, key, sizeof(key));
+    TEST_ASSERT_NOT_NULL(data);
+    TEST_ASSERT(0 == memcmp(data->block.buf, result,
+			    sizeof(result) - sizeof(hmac)));
+    TEST_ASSERT(0 == memcmp(data->block.buf + 45, hmac, sizeof(hmac)));
+
+    ndn_shared_block_release(data);
+    ndn_shared_block_release(sn);
+}
+
+static void test_ndn_data_create2__all(void)
+{
     uint8_t buf[6] = "abcd";
     ndn_name_component_t comps[4] = {
 	{ buf, 1 },
@@ -1108,7 +1198,8 @@ static void test_ndn_data_create__all(void)
 	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
     };
 
-    ndn_shared_block_t* data = ndn_data_create(&name, &meta, &content, NULL, 0);
+    ndn_shared_block_t* data = ndn_data_create2(&name, &meta, &content,
+						NULL, 0);
     TEST_ASSERT_NOT_NULL(data);
     TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result)));
 
@@ -1118,9 +1209,10 @@ static void test_ndn_data_create__all(void)
     uint8_t hmac[32];
     result[42] = NDN_SIG_TYPE_HMAC_SHA256;
     hmac_sha256(key, sizeof(key), (const unsigned*)(result + 2), 41, hmac);
-    data = ndn_data_create(&name, &meta, &content, key, sizeof(key));
+    data = ndn_data_create2(&name, &meta, &content, key, sizeof(key));
     TEST_ASSERT_NOT_NULL(data);
-    TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result) - sizeof(hmac)));
+    TEST_ASSERT(0 == memcmp(data->block.buf, result,
+			    sizeof(result) - sizeof(hmac)));
     TEST_ASSERT(0 == memcmp(data->block.buf + 45, hmac, sizeof(hmac)));
 
     ndn_shared_block_release(data);
@@ -1285,6 +1377,7 @@ Test *tests_ndn_encoding_data_tests(void)
 {
     EMB_UNIT_TESTFIXTURES(fixtures) {
         new_TestFixture(test_ndn_data_create__all),
+	new_TestFixture(test_ndn_data_create2__all),
 	new_TestFixture(test_ndn_data_get_name__valid),
 	new_TestFixture(test_ndn_data_get_metainfo__valid),
 	new_TestFixture(test_ndn_data_get_content__valid),
