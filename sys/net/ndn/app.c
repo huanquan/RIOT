@@ -422,7 +422,7 @@ _add_consumer_cb_entry(ndn_app_t* handle, ndn_shared_block_t* si,
     return entry;
 }
 
-int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
+int ndn_app_express_interest(ndn_app_t* handle, ndn_block_t* name,
 			     void* selectors, uint32_t lifetime,
 			     ndn_app_data_cb_t on_data,
 			     ndn_app_timeout_cb_t on_timeout)
@@ -431,6 +431,48 @@ int ndn_app_express_interest(ndn_app_t* handle, ndn_name_t* name,
 
     // create encoded TLV block
     ndn_shared_block_t* si = ndn_interest_create(name, selectors, lifetime);
+    if (si == NULL) {
+	DEBUG("ndn_app: cannot create interest block (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
+	return -1;
+    }
+
+    // add entry to consumer callback table
+    _consumer_cb_entry_t *entry
+	= _add_consumer_cb_entry(handle, si, on_data, on_timeout);
+    if (entry == NULL) {
+	ndn_shared_block_release(si);
+	return -1;
+    }
+
+    // send interest to NDN thread
+    msg_t send;
+    send.type = NDN_APP_MSG_TYPE_INTEREST;
+    send.content.ptr = (void*)si;
+    if (msg_try_send(&send, ndn_pid) < 1) {
+	DEBUG("ndn_app: cannot send interest to NDN thread (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
+	ndn_shared_block_release(si);
+	// remove consumer cb entry
+	DL_DELETE(handle->_ccb_table, entry);
+	ndn_shared_block_release(entry->pi);
+	free(entry);
+	return -1;
+    }
+    // NDN thread will own the shared block ptr
+
+    return 0;
+}
+
+int ndn_app_express_interest2(ndn_app_t* handle, ndn_name_t* name,
+			      void* selectors, uint32_t lifetime,
+			      ndn_app_data_cb_t on_data,
+			      ndn_app_timeout_cb_t on_timeout)
+{
+    if (handle == NULL) return -1;
+
+    // create encoded TLV block
+    ndn_shared_block_t* si = ndn_interest_create2(name, selectors, lifetime);
     if (si == NULL) {
 	DEBUG("ndn_app: cannot create interest block (pid=%"
 	      PRIkernel_pid ")\n", handle->id);
@@ -485,8 +527,43 @@ _add_producer_cb_entry(ndn_app_t* handle, ndn_shared_block_t* n,
     return entry;
 }
 
-int ndn_app_register_prefix(ndn_app_t* handle, ndn_name_t* name,
+int ndn_app_register_prefix(ndn_app_t* handle, ndn_shared_block_t* name,
 			    ndn_app_interest_cb_t on_interest)
+{
+    if (handle == NULL) return -1;
+
+    _producer_cb_entry_t* entry =
+	_add_producer_cb_entry(handle, name, on_interest);
+    if (entry == NULL) {
+	DEBUG("ndn_app: failed to add producer cb entry (pid=%"
+	      PRIkernel_pid ")", handle->id);
+	ndn_shared_block_release(name);
+	return -1;
+    }
+
+    // notify ndn thread to add fib entry
+    msg_t add_fib, reply;
+    add_fib.type = NDN_APP_MSG_TYPE_ADD_FIB;
+
+    // once received, this pointer will be released by the ndn thread
+    add_fib.content.ptr = (void*)name;
+
+    reply.content.value = 1;
+    msg_send_receive(&add_fib, &reply, ndn_pid);
+    if (reply.content.value != 0) {
+	DEBUG("ndn_app: cannot add fib entry (pid=%"
+	      PRIkernel_pid ")\n", handle->id);
+	DL_DELETE(handle->_pcb_table, entry);
+	ndn_shared_block_release(entry->prefix);
+	free(entry);
+	return -1;
+    }
+
+    return 0;
+}
+
+int ndn_app_register_prefix2(ndn_app_t* handle, ndn_name_t* name,
+			     ndn_app_interest_cb_t on_interest)
 {
     if (handle == NULL) return -1;
 
@@ -504,34 +581,7 @@ int ndn_app_register_prefix(ndn_app_t* handle, ndn_name_t* name,
 	return -1;
     }
 
-    _producer_cb_entry_t* entry =
-	_add_producer_cb_entry(handle, sn, on_interest);
-    if (entry == NULL) {
-	DEBUG("ndn_app: failed to add producer cb entry (pid=%"
-	      PRIkernel_pid ")", handle->id);
-	ndn_shared_block_release(sn);
-	return -1;
-    }
-
-    // notify ndn thread to add fib entry
-    msg_t add_fib, reply;
-    add_fib.type = NDN_APP_MSG_TYPE_ADD_FIB;
-
-    // once received, this pointer will be released by the ndn thread
-    add_fib.content.ptr = (void*)sn;
-
-    reply.content.value = 1;
-    msg_send_receive(&add_fib, &reply, ndn_pid);
-    if (reply.content.value != 0) {
-	DEBUG("ndn_app: cannot add fib entry (pid=%"
-	      PRIkernel_pid ")\n", handle->id);
-	DL_DELETE(handle->_pcb_table, entry);
-	ndn_shared_block_release(entry->prefix);
-	free(entry);
-	return -1;
-    }
-
-    return 0;
+    return ndn_app_register_prefix(handle, sn, on_interest);
 }
 
 int ndn_app_put_data(ndn_app_t* handle, ndn_shared_block_t* sd)
