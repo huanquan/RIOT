@@ -37,6 +37,27 @@ extern "C" {
 /**
  * @brief   Creates a shared TLV block that contains the encoded Data packet.
  *
+ * @param[in]  name          TLV block of the data name.
+ * @param[in]  metainfo      Metainfo of the data.
+ * @param[in]  content       Content of the data.
+ * @param[in]  hmac_key      Pointer to the HMAC key. If NULL, the data packet
+ *                           will be signed with DIGEST_SHA256 signature.
+ * @param[in]  hmac_key_len  Length of the HMAC key. Ignored if @p hmac_key is NULL.
+ *
+ * @return  Pointer to the shared TLV block, if success.
+ * @return  NULL, if out of memory when allocating the block.
+ * @return  NULL, if @p name, @p metainfo or @p content is NULL or invalid.
+ * @return  NULL, if @p hmac_key is not NULL and @p hmac_key_len <= 0.
+ */
+ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
+				    ndn_metainfo_t* metainfo,
+				    ndn_block_t* content,
+				    const unsigned char* hmac_key,
+				    size_t hmac_key_len);
+
+/**
+ * @brief   Creates a shared TLV block that contains the encoded Data packet.
+ *
  * @param[in]  name          Name of the data.
  * @param[in]  metainfo      Metainfo of the data.
  * @param[in]  content       Content of the data.
@@ -49,11 +70,11 @@ extern "C" {
  * @return  NULL, if @p name, @p metainfo or @p content is NULL or invalid.
  * @return  NULL, if @p hmac_key is not NULL and @p hmac_key_len <= 0.
  */
-ndn_shared_block_t* ndn_data_create(ndn_name_t* name,
-				    ndn_metainfo_t* metainfo,
-				    ndn_block_t* content,
-				    const unsigned char* hmac_key,
-				    size_t hmac_key_len);
+ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
+				     ndn_metainfo_t* metainfo,
+				     ndn_block_t* content,
+				     const unsigned char* hmac_key,
+				     size_t hmac_key_len);
 
 /**
  * @brief  Retrieves the TLV-encoded name from a Data TLV block.

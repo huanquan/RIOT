@@ -25,11 +25,89 @@
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
-ndn_shared_block_t* ndn_data_create(ndn_name_t* name,
+ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
 				    ndn_metainfo_t* metainfo,
 				    ndn_block_t* content,
 				    const unsigned char* hmac_key,
 				    size_t hmac_key_len)
+{
+    if (name == NULL || name->buf == NULL || name->len <= 0 ||
+	metainfo == NULL || content == NULL || content->buf == NULL ||
+	content->len < 0)
+	return NULL;
+
+    if (hmac_key != NULL && hmac_key_len <= 0)
+	return NULL;
+
+    int ml = ndn_metainfo_total_length(metainfo);
+    if (ml <= 0) return NULL;
+
+    int cl = ndn_block_total_length(NDN_TLV_CONTENT, content->len);
+
+    int dl = name->len + ml + cl + 39;
+    if (dl > 253) return NULL;  //TODO: support multi-byte length field
+
+    ndn_block_t data;
+    data.len = dl + 2;
+    uint8_t* buf = (uint8_t*)malloc(data.len);
+    if (buf == NULL) {
+	DEBUG("ndn_encoding: cannot allocate memory for data block\n");
+	return NULL;
+    }
+    data.buf = buf;
+
+    // Write data type and length
+    buf[0] = NDN_TLV_DATA;
+    buf[1] = dl;
+
+    // Write name
+    memcpy(buf + 2, name->buf, name->len);
+    buf += name->len + 2;
+
+    // Write metainfo
+    ndn_metainfo_wire_encode(metainfo, buf, ml);
+    buf += ml;
+
+    // Write content
+    buf[0] = NDN_TLV_CONTENT;
+    buf[1] = content->len;
+    memcpy(buf + 2, content->buf, content->len);
+    buf += content->len + 2;
+
+    // Write signature info
+    buf[0] = NDN_TLV_SIGNATURE_INFO;
+    buf[1] = 3;
+    buf[2] = NDN_TLV_SIGNATURE_TYPE;
+    buf[3] = 1;
+    if (hmac_key == NULL)
+	buf[4] = NDN_SIG_TYPE_DIGEST_SHA256;
+    else
+	buf[4] = NDN_SIG_TYPE_HMAC_SHA256;
+    buf += 5;
+    //TODO: support keylocator for HMAC signature
+
+    // Write signature value
+    buf[0] = NDN_TLV_SIGNATURE_VALUE;
+    buf[1] = 32;
+    if (hmac_key == NULL)
+	sha256(data.buf + 2, dl - 34, buf + 2);
+    else
+	hmac_sha256(hmac_key, hmac_key_len,
+		    (const unsigned*)(data.buf + 2), dl - 34, buf + 2);
+
+    ndn_shared_block_t* sd = ndn_shared_block_create_by_move(&data);
+    if (sd == NULL) {
+	free((void*)data.buf);
+	return NULL;
+    }
+    return sd;
+}
+
+ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
+				     ndn_metainfo_t* metainfo,
+				     ndn_block_t* content,
+				     const unsigned char* hmac_key,
+				     size_t hmac_key_len)
 {
     if (name == NULL || metainfo == NULL || content == NULL)
 	return NULL;

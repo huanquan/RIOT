@@ -34,7 +34,23 @@ extern "C" {
 #endif
 
 /**
- * @brief   Creates a shared TLV block that contains the encoded Interest packet.
+ * @brief   Creates a shared TLV block that contains the encoded Interest
+ *          packet.
+ *
+ * @param[in]  name       TLV block of the Interest name.
+ * @param[in]  selectors  Selectors of the Interest. Can be NULL if omitted.
+ * @param[in]  lifetime   Lifetime of the Interest.
+ *
+ * @return  Pointer to the shared block, if success.
+ * @return  -1, if @p name is NULL or invalid.
+ * @return  -1, if out of memory.
+ */
+ndn_shared_block_t* ndn_interest_create(ndn_block_t* name, void* selectors,
+					uint32_t lifetime);
+
+/**
+ * @brief   Creates a shared TLV block that contains the encoded Interest
+ *          packet.
  *
  * @param[in]  name       Name of the Interest.
  * @param[in]  selectors  Selectors of the Interest. Can be NULL if omitted.
@@ -44,8 +60,8 @@ extern "C" {
  * @return  -1, if @p name is NULL or invalid.
  * @return  -1, if out of memory.
  */
-ndn_shared_block_t* ndn_interest_create(ndn_name_t* name, void* selectors,
-					uint32_t lifetime);
+ndn_shared_block_t* ndn_interest_create2(ndn_name_t* name, void* selectors,
+					 uint32_t lifetime);
 
 /**
  * @brief  Retrieves the TLV-encoded name from an Interest TLV block.
