@@ -11,7 +11,7 @@
  * @{
  *
  * @file
- * @brief       Example application for testing NDN stack.
+ * @brief       NDN ping application
  *
  * @author      Wentao Shang <wentaoshang@gmaiil.com>
  *
@@ -24,10 +24,10 @@
 #include "shell.h"
 #include "msg.h"
 
-extern int ndn_test(int argc, char **argv);
+extern int ndn_ping(int argc, char **argv);
 
 static const shell_command_t shell_commands[] = {
-    { "ndntest", "send and receive NDN packet", ndn_test },
+    { "ndnping", "start ndn-ping client and server", ndn_ping },
     { NULL, NULL, NULL }
 };
 

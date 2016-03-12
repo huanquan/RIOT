@@ -1,5 +1,5 @@
 # name of your application
-APPLICATION = ndn_tester
+APPLICATION = ndn_ping
 
 # If no BOARD is found in the environment, use this default:
 BOARD ?= native
@@ -17,6 +17,7 @@ USEMODULE += gnrc_netif_default
 USEMODULE += auto_init_gnrc_netif
 # Add the NDN module
 USEMODULE += ndn
+USEMODULE += random
 # Add also the shell, some shell commands
 USEMODULE += shell
 USEMODULE += shell_commands
