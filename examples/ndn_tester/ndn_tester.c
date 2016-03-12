@@ -91,8 +91,8 @@ static int send_interest(void* context)
 
     printf("consumer: express interest (pid=%"
 	   PRIkernel_pid ")\n", handle->id);
-    if (ndn_app_express_interest(handle, &name, NULL, lifetime,
-				 on_data, on_timeout) != 0) {
+    if (ndn_app_express_interest2(handle, &name, NULL, lifetime,
+				  on_data, on_timeout) != 0) {
 	printf("consumer: failed to express interest (pid=%"
 	       PRIkernel_pid ")\n", handle->id);
 	return NDN_APP_ERROR;
@@ -165,8 +165,8 @@ static int on_interest(ndn_block_t* interest)
     uint8_t con[] = "Hello, world!";
     ndn_block_t content = { con, sizeof(con) };
 
-    ndn_shared_block_t* sd = ndn_data_create(&name, &meta, &content,
-					     key, sizeof(key));
+    ndn_shared_block_t* sd = ndn_data_create2(&name, &meta, &content,
+					      key, sizeof(key));
     if (sd == NULL) {
 	printf("producer: failed to create data block (pid=%"
 	       PRIkernel_pid ")\n", handle->id);
@@ -206,7 +206,7 @@ static void run_producer(void)
 
     printf("producer: register prefix /a/b (pid=%"
 	   PRIkernel_pid ")\n", handle->id);
-    if (ndn_app_register_prefix(handle, &prefix, on_interest) != 0) {
+    if (ndn_app_register_prefix2(handle, &prefix, on_interest) != 0) {
 	printf("producer: failed to register prefix (pid=%"
 	       PRIkernel_pid ")\n", handle->id);
 	ndn_app_destroy(handle);
