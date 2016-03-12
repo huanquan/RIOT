@@ -530,7 +530,10 @@ _add_producer_cb_entry(ndn_app_t* handle, ndn_shared_block_t* n,
 int ndn_app_register_prefix(ndn_app_t* handle, ndn_shared_block_t* name,
 			    ndn_app_interest_cb_t on_interest)
 {
-    if (handle == NULL) return -1;
+    if (handle == NULL) {
+	ndn_shared_block_release(name);
+	return -1;
+    }
 
     _producer_cb_entry_t* entry =
 	_add_producer_cb_entry(handle, name, on_interest);
