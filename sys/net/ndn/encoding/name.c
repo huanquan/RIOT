@@ -15,6 +15,7 @@
  * @author  Wentao Shang <wentaoshang@gmail.com>
  */
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -497,6 +498,64 @@ int ndn_name_compare_block(ndn_block_t* lhs, ndn_block_t* rhs)
 	if (llen < rlen) return -2;
 	else if (llen > rlen) return 2;
 	else return 0;
+    }
+}
+
+static inline int _need_escape(uint8_t c)
+{
+    if ((c >= 'a' && c <= 'z') ||
+	(c >= 'A' && c <= 'Z') ||
+	(c >= '0' && c <= '9') ||
+	c == '+' || c == '.' || c == '_' || c == '-')
+	return 0;
+    else
+	return 1;
+}
+
+void ndn_name_print(ndn_block_t* block)
+{
+    const uint8_t* buf = block->buf;
+    int len = block->len;
+    uint32_t num;
+    int l;
+
+    /* read name type */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return;
+    if (num != NDN_TLV_NAME) return;
+    buf += l;
+    len -= l;
+
+    /* read and ignore name length */
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return;
+    buf += l;
+    len -= l;
+
+    while (len > 0) {
+	/* read name component type */
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return;
+	if (num != NDN_TLV_NAME_COMPONENT) return;
+	buf += l;
+	len -= l;
+
+	/* read name component length */
+	l = ndn_block_get_var_number(buf, len, &num);
+	if (l < 0) return;
+	buf += l;
+	len -= l;
+
+	putchar('/');
+	for (int i = 0; i < (int)num; ++i) {
+	    if (_need_escape(buf[i]) == 0)
+		printf("%c", buf[i]);
+	    else
+		printf("%%%02X", buf[i]);
+	}
+
+	buf += (int)num;
+	len -= (int)num;
     }
 }
 

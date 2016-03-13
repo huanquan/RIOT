@@ -26,6 +26,7 @@
 #include "net/ndn/ndn-constants.h"
 #include "net/ndn/encoding/block.h"
 #include "net/ndn/encoding/shared_block.h"
+#include "byteorder.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -167,6 +168,59 @@ ndn_shared_block_t* ndn_name_append(ndn_block_t* block, const uint8_t* buf,
 				    int len);
 
 /**
+ * @brief   Appends a 1-byte integer as a component to the end of a name
+ *          and creates a new name.
+ * @details Caller is responsible for releasing the returned shared block.
+ *
+ * @param[in]   block   TLV block of the name to append to.
+ * @param[in]   num     Number to append with.
+ *
+ * @return  Shared block of the new name, if success.
+ * @return  NULL, if @p block NULL or is invalid.
+ * @return  NULL, if out of memory.
+ */
+static inline
+ndn_shared_block_t* ndn_name_append_uint8(ndn_block_t* block, uint8_t num) {
+    return ndn_name_append(block, &num, 1);
+}
+
+/**
+ * @brief   Appends a 2-byte integer as a component to the end of a name
+ *          and creates a new name.
+ * @details Caller is responsible for releasing the returned shared block.
+ *
+ * @param[in]   block   TLV block of the name to append to.
+ * @param[in]   num     Number to append with.
+ *
+ * @return  Shared block of the new name, if success.
+ * @return  NULL, if @p block NULL or is invalid.
+ * @return  NULL, if out of memory.
+ */
+static inline
+ndn_shared_block_t* ndn_name_append_uint16(ndn_block_t* block, uint16_t num) {
+    num = HTONS(num);
+    return ndn_name_append(block, (uint8_t*)&num, 2);
+}
+
+/**
+ * @brief   Appends a 4-byte integer as a component to the end of a name
+ *          and creates a new name.
+ * @details Caller is responsible for releasing the returned shared block.
+ *
+ * @param[in]   block   TLV block of the name to append to.
+ * @param[in]   num     Number to append with.
+ *
+ * @return  Shared block of the new name, if success.
+ * @return  NULL, if @p block NULL or is invalid.
+ * @return  NULL, if out of memory.
+ */
+static inline
+ndn_shared_block_t* ndn_name_append_uint32(ndn_block_t* block, uint32_t num) {
+    num = HTONL(num);
+    return ndn_name_append(block, (uint8_t*)&num, 4);
+}
+
+/**
  * @brief   Gets the number of name components in a TLV-encoded NDN name.
  *
  * @param[in]  block  TLV block containing a TLV-encoded NDN name.
@@ -210,6 +264,13 @@ int ndn_name_get_component_from_block(ndn_block_t* block, int pos, ndn_name_comp
  * @return  -3, if @p rhs is NULL or invalid.
  */
 int ndn_name_compare_block(ndn_block_t* lhs, ndn_block_t* rhs);
+
+/**
+ * @brief   Prints out the TLV name block in URI format.
+ * 
+ * @param[in]  block   Name to print.
+ */
+void ndn_name_print(ndn_block_t* block);
 
 #ifdef __cplusplus
 }
