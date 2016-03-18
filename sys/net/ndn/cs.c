@@ -23,7 +23,7 @@
 
 #include "net/ndn/cs.h"
 
-#define ENABLE_DEBUG (1)
+#define ENABLE_DEBUG (0)
 #include "debug.h"
 
 static ndn_cs_entry_t *_cs;

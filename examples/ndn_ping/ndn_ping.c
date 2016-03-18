@@ -51,8 +51,9 @@ static int on_data(ndn_block_t* interest, ndn_block_t* data)
     assert(r == 0);
     assert(content.len == 6);
 
-    printf("client (pid=%" PRIkernel_pid "): content=%u\n",
-	   handle->id, *((uint32_t*)(content.buf + 2)));
+    printf("client (pid=%" PRIkernel_pid "): content=%02X%02X%02X%02X\n",
+	   handle->id, *(content.buf + 2), *(content.buf + 3),
+	   *(content.buf + 4), *(content.buf + 5));
 
     r = ndn_data_verify_signature(data, key, sizeof(key));
     if (r != 0)
@@ -81,10 +82,10 @@ static uint16_t count = 0;
 static int send_interest(void* context)
 {
     const char* uri = (const char*)context;
-    printf("client (pid=%" PRIkernel_pid "): in sched callback\n", handle->id);
 
     // stop the app after sending 10 interests
-    printf("client (pid=%" PRIkernel_pid "): count=%d\n", handle->id, ++count);
+    printf("client (pid=%" PRIkernel_pid "): in sched callback, count=%d\n",
+	   handle->id, ++count);
     if (count == 10) {
 	printf("client (pid=%" PRIkernel_pid "): stop the app\n", handle->id);
 	return NDN_APP_STOP;
@@ -97,7 +98,8 @@ static int send_interest(void* context)
 	return NDN_APP_ERROR;
     }
 
-    ndn_shared_block_t* sin = ndn_name_append_uint16(&sn->block, count);
+    uint32_t rand = random_uint32();
+    ndn_shared_block_t* sin = ndn_name_append_uint32(&sn->block, rand);
     ndn_shared_block_release(sn);
     if (sin == NULL) {
 	printf("client (pid=%" PRIkernel_pid "): cannot append component to "
@@ -143,6 +145,8 @@ static void run_client(const char* uri)
 	return;
     }
 
+    count = 0;
+
     if (ndn_app_schedule(handle, send_interest, (void*)uri, 1000000) != 0) {
 	printf("client (pid=%" PRIkernel_pid "): cannot schedule first "
 	       "interest\n", handle->id);
@@ -179,9 +183,7 @@ static int on_interest(ndn_block_t* interest)
     ndn_name_print(&in);
     putchar('\n');
 
-    uint32_t rand = random_uint32();
-    uint8_t* buf = (uint8_t*)(&rand);
-    ndn_shared_block_t* sdn = ndn_name_append(&in, buf, sizeof(rand));
+    ndn_shared_block_t* sdn = ndn_name_append_uint8(&in, 0);
     if (sdn == NULL) {
 	printf("server (pid=%" PRIkernel_pid "): cannot append component to "
 	       "name\n", handle->id);
@@ -190,6 +192,8 @@ static int on_interest(ndn_block_t* interest)
 
     ndn_metainfo_t meta = { NDN_CONTENT_TYPE_BLOB, -1 };
 
+    uint32_t rand = random_uint32();
+    uint8_t* buf = (uint8_t*)(&rand);
     ndn_block_t content = { buf, sizeof(rand) };
 
     ndn_shared_block_t* sd = ndn_data_create(&sdn->block, &meta, &content,
