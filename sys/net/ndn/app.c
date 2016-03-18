@@ -33,7 +33,7 @@
 
 #include "net/ndn/app.h"
 
-#define ENABLE_DEBUG (1)
+#define ENABLE_DEBUG (0)
 #include "debug.h"
 
 ndn_app_t* ndn_app_create(void)
