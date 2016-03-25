@@ -23,14 +23,40 @@
 
 #include "net/ndn/cs.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG (1)
 #include "debug.h"
 
 static ndn_cs_entry_t *_cs;
+static int _cs_size;
+
+#define MAX_CS_SIZE 1024
+
+static void _ndn_cs_remove(ndn_cs_entry_t* entry)
+{
+    DL_DELETE(_cs, entry);
+    _cs_size -= entry->data->block.len;
+    DEBUG("ndn: remove cs entry (_cs_size=%d)\n", _cs_size);
+    ndn_shared_block_release(entry->data);
+    free(entry);
+}
 
 int ndn_cs_add(ndn_shared_block_t* data)
 {
     assert(data != NULL);
+
+    if (_cs_size + data->block.len > MAX_CS_SIZE) {
+	if (data->block.len > (MAX_CS_SIZE >> 1)) {
+	    DEBUG("ndn: data packet too big\n");
+	    return -1;
+	}
+
+	assert(_cs != NULL);
+	// clean up cs by half
+	while (_cs_size + data->block.len > (MAX_CS_SIZE >> 1)) {
+	    // remove front entries (FIFO)
+	    _ndn_cs_remove(_cs);
+	}
+    }
 
     // allocate new entry
     ndn_cs_entry_t *entry = (ndn_cs_entry_t*)malloc(sizeof(ndn_cs_entry_t));
@@ -43,7 +69,8 @@ int ndn_cs_add(ndn_shared_block_t* data)
     entry->prev = entry->next = NULL;
 
     DL_PREPEND(_cs, entry);
-    DEBUG("ndn: add new cs entry\n");
+    _cs_size += entry->data->block.len;
+    DEBUG("ndn: add new cs entry (_cs_size=%d)\n", _cs_size);
     return 0;
 }
 
@@ -73,7 +100,8 @@ ndn_shared_block_t* ndn_cs_match(ndn_block_t* interest)
 
 void ndn_cs_init(void)
 {
-    _cs = NULL;    
+    _cs = NULL;
+    _cs_size = 0;
 }
 
 
