@@ -86,7 +86,7 @@ static int send_interest(void* context)
     // stop the app after sending 10 interests
     printf("client (pid=%" PRIkernel_pid "): in sched callback, count=%d\n",
 	   handle->id, ++count);
-    if (count == 10) {
+    if (count == 1000) {
 	printf("client (pid=%" PRIkernel_pid "): stop the app\n", handle->id);
 	return NDN_APP_STOP;
     }
