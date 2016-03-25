@@ -33,7 +33,7 @@
 
 #include "net/ndn/ndn.h"
 
-#define ENABLE_DEBUG (1)
+#define ENABLE_DEBUG (0)
 #include "debug.h"
 
 #define GNRC_NDN_STACK_SIZE        (THREAD_STACKSIZE_DEFAULT)
