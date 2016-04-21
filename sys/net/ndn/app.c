@@ -70,12 +70,7 @@ ndn_app_t* ndn_app_create(void)
     }
 
     // init msg queue to receive message
-    if (msg_init_queue(handle->_msg_queue, NDN_APP_MSG_QUEUE_SIZE) != 0) {
-	DEBUG("ndn_app: cannot init msg queue (pid=%"
-	      PRIkernel_pid ")\n", handle->id);
-	free(handle);
-	return NULL;
-    }
+    msg_init_queue(handle->_msg_queue, NDN_APP_MSG_QUEUE_SIZE);
 
     return handle;
 }
