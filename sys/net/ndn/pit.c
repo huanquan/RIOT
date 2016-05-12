@@ -116,7 +116,7 @@ int ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_shared_block_t* si)
 		/* reset timer */
 		xtimer_set_msg(&entry->timer, lifetime, &entry->timer_msg,
 			       ndn_pid);
-		return 0;
+		return 1;
 	    }
 	}
 	//TODO: also check selectors

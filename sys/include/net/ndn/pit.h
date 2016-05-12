@@ -53,6 +53,7 @@ typedef struct ndn_pit_entry {
  *                        be "copied" into the new PIT entry.
  *
  * @return     0, if success.
+ * @return     1, if Interet with the same name and selectors already exists.
  * @return     -1, if @p si is invlid.
  * @retrun     -1, if out of memory.
  */
