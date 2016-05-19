@@ -22,10 +22,12 @@
 #include "net/gnrc/netreg.h"
 #include "net/ndn/face_table.h"
 #include "net/ndn/fib.h"
+#include "net/ndn/l2.h"
+#include "random.h"
 
 #include "net/ndn/netif.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG (1)
 #include "debug.h"
 
 static ndn_netif_t _netif_table[GNRC_NETIF_NUMOF];
@@ -102,32 +104,8 @@ static ndn_netif_t* _ndn_netif_find(kernel_pid_t iface)
     return NULL;
 }
 
-int ndn_netif_send(kernel_pid_t iface, ndn_block_t* block)
+static int _ndn_netif_send_packet(kernel_pid_t iface, gnrc_pktsnip_t* pkt)
 {
-    assert(block != NULL);
-    assert(block->buf != NULL);
-    assert(block->len > 0);
-
-    ndn_netif_t* netif = _ndn_netif_find(iface);
-    if (netif == NULL) {
-	DEBUG("ndn: no such network device (iface=%" PRIkernel_pid ")", iface);
-	return -1;
-    }
-
-    /* check mtu */
-    if (block->len > netif->mtu) {
-	DEBUG("ndn: packet size (%u) exceeds device mtu (iface=%"
-	      PRIkernel_pid ")\n", block->len, iface);
-	return -1;
-    }
-
-    gnrc_pktsnip_t* pkt = ndn_block_create_packet(block);
-    if (pkt == NULL) {
-	DEBUG("ndn: cannot create packet during sending (iface=%"
-	      PRIkernel_pid ")\n", iface);
-	return -1;
-    }
-
     /* allocate interface header */
     gnrc_pktsnip_t *netif_hdr = gnrc_netif_hdr_build(NULL, 0, NULL, 0);
 
@@ -153,6 +131,99 @@ int ndn_netif_send(kernel_pid_t iface, ndn_block_t* block)
 
     DEBUG("ndn: successfully sent packet (iface=%" PRIkernel_pid ")\n", iface);
     return 0;
+}
+
+static int _ndn_netif_send_fragments(kernel_pid_t iface, ndn_block_t* block,
+                                     uint16_t mtu)
+{
+    if (mtu <= NDN_L2_FRAG_HDR_LEN) {
+	DEBUG("ndn: mtu smaller than L2 fragmentation header size (iface=%"
+	      PRIkernel_pid ")\n", iface);
+	return -1;
+    }
+
+    int total_frags = block->len / (mtu - NDN_L2_FRAG_HDR_LEN) + 1;
+    if (total_frags > 32) {
+	DEBUG("ndn: too many fragments to send (iface=%"
+	      PRIkernel_pid ")\n", iface);
+	return -1;
+    }
+
+    bool mf = true;
+    uint8_t seq = 0;
+    uint16_t id = (uint16_t)((random_uint32() >> 11) & 0xFFFF);
+
+    ndn_block_t tmp;
+    int bytes_sent = 0;
+    while (bytes_sent < block->len) {
+	tmp.buf = block->buf + bytes_sent;
+	tmp.len = mtu - NDN_L2_FRAG_HDR_LEN;
+	if (tmp.len + bytes_sent > block->len) {
+	    tmp.len = block->len - bytes_sent;
+	    mf = false;
+	    assert(seq <= 31);
+	}
+
+	gnrc_pktsnip_t* pkt = ndn_block_create_packet(&tmp);
+	if (pkt == NULL) {
+	    DEBUG("ndn: cannot create packet during sending fragments (iface=%"
+		  PRIkernel_pid ")\n", iface);
+	    return -1;
+	}
+
+	gnrc_pktsnip_t* l2frag = ndn_l2_frag_build_hdr(mf, seq, id);
+	if (l2frag == NULL) {
+	    DEBUG("ndn: cannot create l2frag header during sending (iface=%"
+		  PRIkernel_pid ")\n", iface);
+	    gnrc_pktbuf_release(pkt);
+	    return -1;
+	}
+
+	LL_PREPEND(pkt, l2frag);
+
+	if (_ndn_netif_send_packet(iface, pkt) < 0) return -1;
+	DEBUG("ndn: sent fragment (MF=%x, SEQ=%u, ID=%02X); "
+	      "fragment size = %d\n",
+	      mf, seq, id, tmp.len);
+
+	seq++;
+	bytes_sent += tmp.len;
+    }
+
+    return 0;
+}
+
+
+int ndn_netif_send(kernel_pid_t iface, ndn_block_t* block)
+{
+    assert(block != NULL);
+    assert(block->buf != NULL);
+    assert(block->len > 0);
+
+    ndn_netif_t* netif = _ndn_netif_find(iface);
+    if (netif == NULL) {
+	DEBUG("ndn: no such network device (iface=%" PRIkernel_pid ")", iface);
+	return -1;
+    }
+
+    /*XXX: test only!!!*/
+    return _ndn_netif_send_fragments(iface, block, 50);
+
+    /* check mtu */
+/*    if (block->len > netif->mtu) {
+	DEBUG("ndn: packet size (%d) exceeds device mtu (iface=%"
+	      PRIkernel_pid "); send with fragmentation\n", block->len, iface);
+	return _ndn_netif_send_fragments(iface, block, netif->mtu);
+    }
+
+    gnrc_pktsnip_t* pkt = ndn_block_create_packet(block);
+    if (pkt == NULL) {
+	DEBUG("ndn: cannot create packet during sending (iface=%"
+	      PRIkernel_pid ")\n", iface);
+	return -1;
+    }
+
+    return _ndn_netif_send_packet(iface, pkt);*/
 }
 
 /** @} */

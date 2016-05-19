@@ -23,6 +23,7 @@
 
 #include "net/ndn/face_table.h"
 #include "net/ndn/netif.h"
+#include "net/ndn/l2.h"
 #include "net/ndn/pit.h"
 #include "net/ndn/fib.h"
 #include "net/ndn/cs.h"
@@ -178,6 +179,47 @@ static void _process_packet(kernel_pid_t face_id, int face_type,
     assert(pkt != NULL);
     assert(pkt->type == GNRC_NETTYPE_NDN);
 
+    uint8_t* buf = (uint8_t*)pkt->data;
+    /* check if the packet starts with l2 fragmentation header */
+    if (buf[0] & NDN_L2_FRAG_HB_MASK) {
+	uint16_t frag_id = (buf[1] << 8) + buf[2];
+	DEBUG("ndn: l2 fragment received (MF=%x, SEQ=%u, ID=%02x, "
+	      "packet size = %d, iface=%" PRIkernel_pid ")\n",
+	      (buf[0] & NDN_L2_FRAG_MF_MASK) >> 5,
+	      buf[0] & NDN_L2_FRAG_SEQ_MASK,
+	      frag_id, pkt->size, face_id);
+	ndn_shared_block_t* sb = ndn_l2_frag_receive(face_id, pkt, frag_id);
+	if (sb != NULL) {
+	    DEBUG("ndn: complete packet reassembled (ID=%02x, size=%d, iface=%"
+		  PRIkernel_pid ")\n", frag_id, sb->block.len, face_id);
+
+	    // Read type
+	    uint32_t num;
+	    if (ndn_block_get_var_number(
+		    sb->block.buf, sb->block.len, &num) < 0) {
+		DEBUG("ndn: cannot read NDN packet type from shared block\n");
+		ndn_shared_block_release(sb);
+		return;
+	    }
+
+	    switch (num) {
+		case NDN_TLV_INTEREST:
+		    _process_interest(face_id, face_type, sb);
+		    break;
+
+		case NDN_TLV_DATA:
+		    _process_data(face_id, face_type, sb);
+		    break;
+
+		default:
+		    DEBUG("ndn: unknown reassembled packet type\n");
+		    ndn_shared_block_release(sb);
+		    break;
+	    }
+	}
+	return;
+    }
+    
     ndn_block_t block;
     if (ndn_block_from_packet(pkt, &block) != 0) {
 	DEBUG("ndn: cannot get block from packet\n");
