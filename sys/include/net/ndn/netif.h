@@ -48,9 +48,9 @@ void ndn_netif_auto_add(void);
  * @param[in]  block    TLV block to send.
  *
  * @return 0, if success.
- * @return -1, if fails to allocate memory for the packet.
+ * @return -1, if out of memory during sending.
+ * @return -1, if @p block requries more than 32 L2 fragments to send.
  * @return -1, if the interface with id @p iface does not exist.
- * @return -1, if @p block exceeds the MTU of the interface @p iface.
  * @return -1, if fails to send the packet.
  */
 int ndn_netif_send(kernel_pid_t iface, ndn_block_t* block);

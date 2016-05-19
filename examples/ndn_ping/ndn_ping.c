@@ -59,6 +59,7 @@ static int on_data(ndn_block_t* interest, ndn_block_t* data)
     if (r != 0)
 	printf("client (pid=%" PRIkernel_pid "): fail to verify signature\n",
 	       handle->id);
+    printf("client (pid=%" PRIkernel_pid "): signature valid\n", handle->id);
 
     return NDN_APP_CONTINUE;
 }
