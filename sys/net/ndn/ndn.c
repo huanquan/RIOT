@@ -179,6 +179,8 @@ static void _process_packet(kernel_pid_t face_id, int face_type,
     assert(pkt != NULL);
     assert(pkt->type == GNRC_NETTYPE_NDN);
 
+    ndn_shared_block_t* sb = NULL;
+
     uint8_t* buf = (uint8_t*)pkt->data;
     /* check if the packet starts with l2 fragmentation header */
     if (buf[0] & NDN_L2_FRAG_HB_MASK) {
@@ -188,80 +190,43 @@ static void _process_packet(kernel_pid_t face_id, int face_type,
 	      (buf[0] & NDN_L2_FRAG_MF_MASK) >> 5,
 	      buf[0] & NDN_L2_FRAG_SEQ_MASK,
 	      frag_id, pkt->size, face_id);
-	ndn_shared_block_t* sb = ndn_l2_frag_receive(face_id, pkt, frag_id);
-	if (sb != NULL) {
-	    DEBUG("ndn: complete packet reassembled (ID=%02x, size=%d, iface=%"
-		  PRIkernel_pid ")\n", frag_id, sb->block.len, face_id);
-
-	    // Read type
-	    uint32_t num;
-	    if (ndn_block_get_var_number(
-		    sb->block.buf, sb->block.len, &num) < 0) {
-		DEBUG("ndn: cannot read NDN packet type from shared block\n");
-		ndn_shared_block_release(sb);
-		return;
-	    }
-
-	    switch (num) {
-		case NDN_TLV_INTEREST:
-		    _process_interest(face_id, face_type, sb);
-		    break;
-
-		case NDN_TLV_DATA:
-		    _process_data(face_id, face_type, sb);
-		    break;
-
-		default:
-		    DEBUG("ndn: unknown reassembled packet type\n");
-		    ndn_shared_block_release(sb);
-		    break;
-	    }
+	sb = ndn_l2_frag_receive(face_id, pkt, frag_id);
+    }
+    else {
+	ndn_block_t block;
+	if (ndn_block_from_packet(pkt, &block) != 0) {
+	    DEBUG("ndn: cannot get block from packet\n");
+	    gnrc_pktbuf_release(pkt);
+	    return;
 	}
-	return;
-    }
-    
-    ndn_block_t block;
-    if (ndn_block_from_packet(pkt, &block) != 0) {
-	DEBUG("ndn: cannot get block from packet\n");
+	sb = ndn_shared_block_create(&block);
 	gnrc_pktbuf_release(pkt);
-	return;
     }
 
-    uint32_t num;
-    if (ndn_block_get_var_number(block.buf, block.len, &num) < 0) {
-	DEBUG("ndn: cannot read NDN packet type\n");
-	gnrc_pktbuf_release(pkt);
-	return;
-    }
+    if (sb != NULL) {
+	// Read type
+	uint32_t num;
+	if (ndn_block_get_var_number(
+		sb->block.buf, sb->block.len, &num) < 0) {
+	    DEBUG("ndn: cannot read NDN packet type from shared block\n");
+	    ndn_shared_block_release(sb);
+	    return;
+	}
 
-    ndn_shared_block_t* sb = NULL;
-    switch (num) {
-        case NDN_TLV_INTEREST:
-	    sb = ndn_shared_block_create(&block);
-	    gnrc_pktbuf_release(pkt);
-	    if (sb != NULL) {
+	switch (num) {
+	    case NDN_TLV_INTEREST:
 		_process_interest(face_id, face_type, sb);
-	    }
-	    else {
-		DEBUG("ndn: cannot create shared block for packet\n");
-	    }
-	    break;
+		break;
 
-        case NDN_TLV_DATA:
-	    sb = ndn_shared_block_create(&block);
-	    gnrc_pktbuf_release(pkt);
-	    if (sb != NULL) {
+	    case NDN_TLV_DATA:
 		_process_data(face_id, face_type, sb);
-	    }
-	    else {
-		DEBUG("ndn: cannot create shared block for packet\n");
-	    }
-	    break;
+		break;
 
-        default:
-	    DEBUG("ndn: unknown NDN packet type\n");
-	    gnrc_pktbuf_release(pkt);
-	    break;
+	    default:
+		DEBUG("ndn: unknown reassembled packet type\n");
+		ndn_shared_block_release(sb);
+		break;
+	}
     }
     return;
 }
