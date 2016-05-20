@@ -24,6 +24,7 @@
 #include "net/ndn/fib.h"
 #include "net/ndn/l2.h"
 #include "random.h"
+#include "thread.h"
 
 #include "net/ndn/netif.h"
 
@@ -60,6 +61,10 @@ void ndn_netif_auto_add(void)
 		  PRIkernel_pid ")\n", iface);
 	    continue;
 	}
+
+	//XXX: test-only!!!
+	if (_netif_table[i].mtu > 50)
+	    _netif_table[i].mtu = 50;
 
 	// set device net proto to NDN
 	if (gnrc_netapi_get(iface, NETOPT_PROTO, 0,
@@ -182,9 +187,12 @@ static int _ndn_netif_send_fragments(kernel_pid_t iface, ndn_block_t* block,
 	LL_PREPEND(pkt, l2frag);
 
 	if (_ndn_netif_send_packet(iface, pkt) < 0) return -1;
-	DEBUG("ndn: sent fragment (MF=%x, SEQ=%u, ID=%02X); "
-	      "fragment size = %d\n",
-	      mf, seq, id, tmp.len);
+	DEBUG("ndn: sent fragment (MF=%x, SEQ=%u, ID=%02X, "
+	      "size=%d, iface=%" PRIkernel_pid ")\n",
+	      mf, seq, id, tmp.len, iface);
+
+	// yield after sending a fragment
+	thread_yield();
 
 	seq++;
 	bytes_sent += tmp.len;
@@ -206,13 +214,11 @@ int ndn_netif_send(kernel_pid_t iface, ndn_block_t* block)
 	return -1;
     }
 
-    /*XXX: test only!!!*/
-    return _ndn_netif_send_fragments(iface, block, 50);
-
     /* check mtu */
-/*    if (block->len > netif->mtu) {
-	DEBUG("ndn: packet size (%d) exceeds device mtu (iface=%"
-	      PRIkernel_pid "); send with fragmentation\n", block->len, iface);
+    if (block->len > netif->mtu) {
+	DEBUG("ndn: packet size (%d) exceeds device mtu (%u); "
+	      "send with fragmentation (iface=%" PRIkernel_pid ")\n",
+	      block->len, netif->mtu, iface);
 	return _ndn_netif_send_fragments(iface, block, netif->mtu);
     }
 
@@ -223,7 +229,7 @@ int ndn_netif_send(kernel_pid_t iface, ndn_block_t* block)
 	return -1;
     }
 
-    return _ndn_netif_send_packet(iface, pkt);*/
+    return _ndn_netif_send_packet(iface, pkt);
 }
 
 /** @} */
