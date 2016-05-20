@@ -258,6 +258,8 @@ ndn_shared_block_t* ndn_l2_frag_receive(kernel_pid_t iface,
 	    free((void*)b.buf);
 	    return NULL;
 	}
+	DEBUG("ndn: complete packet reassembled (ID=%02x, size=%d, iface=%"
+		  PRIkernel_pid ")\n", id, sb->block.len, iface);
 	return sb;
     }
     // packet not complete yet; wait for more fragments
