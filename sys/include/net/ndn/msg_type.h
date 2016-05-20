@@ -39,6 +39,10 @@ extern "C" {
 
 #define NDN_APP_MSG_TYPE_ADD_FIB    (0x0306)
 
+#define NDN_PIT_MSG_TYPE_TIMEOUT    (0x0307)
+
+#define NDN_L2_FRAG_MSG_TYPE_TIMEOUT   (0x0308)
+
 #ifdef __cplusplus
 }
 #endif

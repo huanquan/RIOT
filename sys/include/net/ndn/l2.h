@@ -86,6 +86,13 @@ ndn_shared_block_t* ndn_l2_frag_receive(kernel_pid_t iface,
 					gnrc_pktsnip_t* pkt, uint16_t id);
 
 /**
+ * @brief  Removes pending fragments that have timed out.
+ *
+ * @param[in]  msg    Message pointer that identifies the expired entry.
+ */
+void ndn_l2_frag_timeout(msg_t* msg);
+
+/**
  * @brief  Initializes L2 adaptation layer.
  */
 void ndn_l2_init(void);

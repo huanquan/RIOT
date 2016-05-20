@@ -146,7 +146,7 @@ int ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_shared_block_t* si)
     entry->timer.target = entry->timer.long_target = 0;
 
     /* initialize the msg struct */
-    entry->timer_msg.type = MSG_XTIMER;
+    entry->timer_msg.type = NDN_PIT_MSG_TYPE_TIMEOUT;
     entry->timer_msg.content.ptr = (char*)(&entry->timer_msg);
 
     /* set a timer to send a message to ndn thread */

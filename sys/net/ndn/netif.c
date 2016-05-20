@@ -63,8 +63,8 @@ void ndn_netif_auto_add(void)
 	}
 
 	//XXX: test-only!!!
-	if (_netif_table[i].mtu > 50)
-	    _netif_table[i].mtu = 50;
+	if (_netif_table[i].mtu > 10)
+	    _netif_table[i].mtu = 10;
 
 	// set device net proto to NDN
 	if (gnrc_netapi_get(iface, NETOPT_PROTO, 0,

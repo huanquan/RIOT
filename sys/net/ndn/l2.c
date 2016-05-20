@@ -18,6 +18,9 @@
 #include <string.h>
 
 #include "net/gnrc/netif/hdr.h"
+#include "net/ndn/msg_type.h"
+#include "net/ndn/ndn.h"
+#include "xtimer.h"
 
 #include "net/ndn/l2.h"
 
@@ -54,7 +57,10 @@ typedef struct _l2_frag_block {
 } _l2_frag_block_t;
 
 typedef struct _l2_frag_entry {
+    struct _l2_frag_entry* prev;
     struct _l2_frag_entry* next;
+    xtimer_t timer;
+    msg_t timer_msg;
     uint8_t* netif_hdr;
     size_t netif_hdr_len;
     uint32_t frags_map;
@@ -62,10 +68,14 @@ typedef struct _l2_frag_entry {
     _l2_frag_block_t* frags;
 } _l2_frag_entry_t;
 
+//TODO: use larger timeout value in non-test environment
+#define NDN_L2_FRAG_MAX_LIFETIME    (10U * SEC_IN_USEC)
+
 static _l2_frag_entry_t* _l2_frag_list;
 
 static void _release_l2_frag_entry(_l2_frag_entry_t* entry) {
-    LL_DELETE(_l2_frag_list, entry);
+    DL_DELETE(_l2_frag_list, entry);
+    xtimer_remove(&entry->timer);
     _l2_frag_block_t *blk, *tmp;
     LL_FOREACH_SAFE(entry->frags, blk, tmp) {
 	free(blk->data);
@@ -76,7 +86,8 @@ static void _release_l2_frag_entry(_l2_frag_entry_t* entry) {
 }
 
 ndn_shared_block_t* ndn_l2_frag_receive(kernel_pid_t iface,
-					gnrc_pktsnip_t* pkt, uint16_t id) {
+					gnrc_pktsnip_t* pkt, uint16_t id)
+{
     (void)iface;
 
     gnrc_pktsnip_t* netif_hdr_pkt =
@@ -97,7 +108,7 @@ ndn_shared_block_t* ndn_l2_frag_receive(kernel_pid_t iface,
     }
 
     _l2_frag_entry_t* entry = NULL;
-    LL_FOREACH(_l2_frag_list, entry) {
+    DL_FOREACH(_l2_frag_list, entry) {
 	gnrc_netif_hdr_t* hdr = (gnrc_netif_hdr_t*)(entry->netif_hdr);
 	gnrc_netif_hdr_t* hdr_pkt = (gnrc_netif_hdr_t*)(netif_hdr_pkt->data);
 
@@ -143,11 +154,21 @@ ndn_shared_block_t* ndn_l2_frag_receive(kernel_pid_t iface,
 	// copy fragmentation id
 	entry->id = id;
 
+	// initialize timer
+	entry->timer.target = entry->timer.long_target = 0;
+	entry->timer_msg.type = NDN_L2_FRAG_MSG_TYPE_TIMEOUT;
+	entry->timer_msg.content.ptr = (char*)(&entry->timer_msg);
+
 	// insert entry into frag list
-	LL_PREPEND(_l2_frag_list, entry);
+	DL_PREPEND(_l2_frag_list, entry);
     }
 
     assert(entry != NULL);
+
+    // set (reset) timer
+    xtimer_set_msg(&entry->timer, NDN_L2_FRAG_MAX_LIFETIME,
+    		   &entry->timer_msg, ndn_pid);
+
     if ((entry->frags_map & seq_map) != 0) {
 	// duplicate packet
 	DEBUG("ndn: duplicate fragment (SEQ=%u, ID=%02x) (iface=%"
@@ -266,8 +287,18 @@ ndn_shared_block_t* ndn_l2_frag_receive(kernel_pid_t iface,
     return NULL;
 }
 
-//TODO: add timer for each frag entry
+void ndn_l2_frag_timeout(msg_t *msg)
+{
+    _l2_frag_entry_t *entry, *tmp;
+    DL_FOREACH_SAFE(_l2_frag_list, entry, tmp) {
+	if (&entry->timer_msg == msg) {
+	    DEBUG("ndn: remove expired l2 frag entry (ID=%u)\n", entry->id);
+	    _release_l2_frag_entry(entry);
+	}
+    }
+}
 
-void ndn_l2_init(void) {
+void ndn_l2_init(void)
+{
     _l2_frag_list = NULL;
 }

@@ -254,10 +254,16 @@ static void *_event_loop(void *args)
         msg_receive(&msg);
 
         switch (msg.type) {
-	    case MSG_XTIMER:
-		DEBUG("ndn: XTIMER message received from pid %"
+	    case NDN_PIT_MSG_TYPE_TIMEOUT:
+		DEBUG("ndn: PIT TIMEOUT message received from pid %"
 		      PRIkernel_pid "\n", msg.sender_pid);
 		ndn_pit_timeout((msg_t*)msg.content.ptr);
+		break;
+
+	    case NDN_L2_FRAG_MSG_TYPE_TIMEOUT:
+		DEBUG("ndn: L2_FRAG TIMEOUT message received from pid %"
+		      PRIkernel_pid "\n", msg.sender_pid);
+		ndn_l2_frag_timeout((msg_t*)msg.content.ptr);
 		break;
 
 	    case NDN_APP_MSG_TYPE_ADD_FACE:
