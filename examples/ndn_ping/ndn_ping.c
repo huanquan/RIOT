@@ -197,8 +197,9 @@ static int on_interest(ndn_block_t* interest)
     uint8_t* buf = (uint8_t*)(&rand);
     ndn_block_t content = { buf, sizeof(rand) };
 
-    ndn_shared_block_t* sd = ndn_data_create(&sdn->block, &meta, &content,
-					     key, sizeof(key));
+    ndn_shared_block_t* sd =
+	ndn_data_create(&sdn->block, &meta, &content,
+			NDN_SIG_TYPE_HMAC_SHA256, key, sizeof(key));
     if (sd == NULL) {
 	printf("server (pid=%" PRIkernel_pid "): cannot create data block\n",
 	       handle->id);

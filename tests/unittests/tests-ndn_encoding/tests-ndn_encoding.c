@@ -25,6 +25,7 @@
 #include "net/ndn/encoding/metainfo.h"
 #include "net/ndn/encoding/data.h"
 #include "random.h"
+#include "uECC.h"
 
 #include "unittests-constants.h"
 #include "tests-ndn_encoding.h"
@@ -1134,29 +1135,59 @@ static void test_ndn_data_create__all(void)
 	NDN_TLV_SIGNATURE_INFO, 3,
 	NDN_TLV_SIGNATURE_TYPE, 1, NDN_SIG_TYPE_DIGEST_SHA256,
 	NDN_TLV_SIGNATURE_VALUE, 32,
-	0xe3, 0x8f, 0x85, 0x5b, 0x51, 0x7f, 0x42, 0xa6, 0x4f, 0x5a, 0x34,
-	0x38, 0x00, 0x0b, 0x2b, 0x34, 0xa5, 0x85, 0x1c, 0xc9, 0x97, 0xf2,
-	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
     };
 
-    ndn_shared_block_t* data = ndn_data_create(&sn->block, &meta, &content,
-					       NULL, 0);
+    uint8_t h[32];
+    sha256(result + 2, sizeof(result) - 4, h);
+
+    ndn_shared_block_t* data =
+	ndn_data_create(&sn->block, &meta, &content,
+			NDN_SIG_TYPE_DIGEST_SHA256, NULL, 0);
     TEST_ASSERT_NOT_NULL(data);
     TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result)));
+    TEST_ASSERT(0 == memcmp(data->block.buf + sizeof(result), h, sizeof(h)));
 
     ndn_shared_block_release(data);
 
     unsigned char key[] = { 0xa1, 0xb9, 0xc8, 0xd7, 0xe0, 0xf3, 0xf2, 0xe4 };
-    uint8_t hmac[32];
+
     result[42] = NDN_SIG_TYPE_HMAC_SHA256;
-    hmac_sha256(key, sizeof(key), (const unsigned*)(result + 2), 41, hmac);
-    data = ndn_data_create(&sn->block, &meta, &content, key, sizeof(key));
+    hmac_sha256(key, sizeof(key), (const unsigned*)(result + 2),
+		sizeof(result) - 4, h);
+    data = ndn_data_create(&sn->block, &meta, &content,
+			   NDN_SIG_TYPE_HMAC_SHA256, key, sizeof(key));
     TEST_ASSERT_NOT_NULL(data);
-    TEST_ASSERT(0 == memcmp(data->block.buf, result,
-			    sizeof(result) - sizeof(hmac)));
-    TEST_ASSERT(0 == memcmp(data->block.buf + 45, hmac, sizeof(hmac)));
+    TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result)));
+    TEST_ASSERT(0 == memcmp(data->block.buf + sizeof(result), h, sizeof(h)));
 
     ndn_shared_block_release(data);
+
+    uint8_t ecc_key_pri[] = { 0x38, 0x67, 0x54, 0x73, 0x8B, 0x72, 0x4C, 0xD6,
+			      0x3E, 0xBD, 0x52, 0xF3, 0x64, 0xD8, 0xF5, 0x7F,
+			      0xB5, 0xE6, 0xF2, 0x9F, 0xC2, 0x7B, 0xD6, 0x90,
+			      0x42, 0x9D, 0xC8, 0xCE, 0xF0, 0xDE, 0x75, 0xB3 };
+    uint8_t ecc_key_pub[] = { 0x2C, 0x3C, 0x18, 0xCB, 0x31, 0x88, 0x0B, 0xC3,
+			      0x73, 0xF4, 0x4A, 0xD4, 0x3F, 0x8C, 0x80, 0x24,
+			      0xD4, 0x8E, 0xBE, 0xB4, 0xAD, 0xF0, 0x69, 0xA6,
+			      0xFE, 0x29, 0x12, 0xAC, 0xC1, 0xE1, 0x26, 0x7E,
+			      0x2B, 0x25, 0x69, 0x02, 0xD5, 0x85, 0x51, 0x4B,
+			      0x91, 0xAC, 0xB9, 0xD1, 0x19, 0xE9, 0x5E, 0x97,
+			      0x20, 0xBB, 0x16, 0x2A, 0xD3, 0x2F, 0xB5, 0x11,
+			      0x1B, 0xD1, 0xAF, 0x76, 0xDB, 0xAD, 0xB8, 0xCE };
+
+    result[1] += 32;
+    result[42] = NDN_SIG_TYPE_ECDSA_SHA256;
+    result[44] = 64;
+    data = ndn_data_create(&sn->block, &meta, &content,
+			   NDN_SIG_TYPE_ECDSA_SHA256, ecc_key_pri, 32);
+    TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result)));
+    uECC_Curve curve = uECC_secp256r1();
+    sha256(result + 2, sizeof(result) - 4, h);
+    TEST_ASSERT(uECC_verify(ecc_key_pub, h, sizeof(h),
+			    data->block.buf + sizeof(result), curve) != 0);
+
+    ndn_shared_block_release(data);
+
     ndn_shared_block_release(sn);
 }
 
@@ -1193,27 +1224,56 @@ static void test_ndn_data_create2__all(void)
 	NDN_TLV_SIGNATURE_INFO, 3,
 	NDN_TLV_SIGNATURE_TYPE, 1, NDN_SIG_TYPE_DIGEST_SHA256,
 	NDN_TLV_SIGNATURE_VALUE, 32,
-	0xe3, 0x8f, 0x85, 0x5b, 0x51, 0x7f, 0x42, 0xa6, 0x4f, 0x5a, 0x34,
-	0x38, 0x00, 0x0b, 0x2b, 0x34, 0xa5, 0x85, 0x1c, 0xc9, 0x97, 0xf2,
-	0x0c, 0x8c, 0x55, 0x28, 0xf5, 0xaf, 0xc0, 0xc2, 0x58, 0x54,
     };
 
-    ndn_shared_block_t* data = ndn_data_create2(&name, &meta, &content,
-						NULL, 0);
+    uint8_t h[32];
+    sha256(result + 2, sizeof(result) - 4, h);
+    
+    ndn_shared_block_t* data =
+	ndn_data_create2(&name, &meta, &content,
+			 NDN_SIG_TYPE_DIGEST_SHA256, NULL, 0);
     TEST_ASSERT_NOT_NULL(data);
     TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result)));
+    TEST_ASSERT(0 == memcmp(data->block.buf + sizeof(result), h, sizeof(h)));
 
     ndn_shared_block_release(data);
 
     unsigned char key[] = { 0xa1, 0xb9, 0xc8, 0xd7, 0xe0, 0xf3, 0xf2, 0xe4 };
-    uint8_t hmac[32];
+
     result[42] = NDN_SIG_TYPE_HMAC_SHA256;
-    hmac_sha256(key, sizeof(key), (const unsigned*)(result + 2), 41, hmac);
-    data = ndn_data_create2(&name, &meta, &content, key, sizeof(key));
+    hmac_sha256(key, sizeof(key), (const unsigned*)(result + 2),
+		sizeof(result) - 4, h);
+    data = ndn_data_create2(&name, &meta, &content,
+			    NDN_SIG_TYPE_HMAC_SHA256, key, sizeof(key));
     TEST_ASSERT_NOT_NULL(data);
-    TEST_ASSERT(0 == memcmp(data->block.buf, result,
-			    sizeof(result) - sizeof(hmac)));
-    TEST_ASSERT(0 == memcmp(data->block.buf + 45, hmac, sizeof(hmac)));
+    TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result)));
+    TEST_ASSERT(0 == memcmp(data->block.buf + sizeof(result), h, sizeof(h)));
+
+    ndn_shared_block_release(data);
+
+    uint8_t ecc_key_pri[] = { 0x38, 0x67, 0x54, 0x73, 0x8B, 0x72, 0x4C, 0xD6,
+			      0x3E, 0xBD, 0x52, 0xF3, 0x64, 0xD8, 0xF5, 0x7F,
+			      0xB5, 0xE6, 0xF2, 0x9F, 0xC2, 0x7B, 0xD6, 0x90,
+			      0x42, 0x9D, 0xC8, 0xCE, 0xF0, 0xDE, 0x75, 0xB3 };
+    uint8_t ecc_key_pub[] = { 0x2C, 0x3C, 0x18, 0xCB, 0x31, 0x88, 0x0B, 0xC3,
+			      0x73, 0xF4, 0x4A, 0xD4, 0x3F, 0x8C, 0x80, 0x24,
+			      0xD4, 0x8E, 0xBE, 0xB4, 0xAD, 0xF0, 0x69, 0xA6,
+			      0xFE, 0x29, 0x12, 0xAC, 0xC1, 0xE1, 0x26, 0x7E,
+			      0x2B, 0x25, 0x69, 0x02, 0xD5, 0x85, 0x51, 0x4B,
+			      0x91, 0xAC, 0xB9, 0xD1, 0x19, 0xE9, 0x5E, 0x97,
+			      0x20, 0xBB, 0x16, 0x2A, 0xD3, 0x2F, 0xB5, 0x11,
+			      0x1B, 0xD1, 0xAF, 0x76, 0xDB, 0xAD, 0xB8, 0xCE };
+
+    result[1] += 32;
+    result[42] = NDN_SIG_TYPE_ECDSA_SHA256;
+    result[44] = 64;
+    data = ndn_data_create2(&name, &meta, &content,
+			    NDN_SIG_TYPE_ECDSA_SHA256, ecc_key_pri, 32);
+    TEST_ASSERT(0 == memcmp(data->block.buf, result, sizeof(result)));
+    uECC_Curve curve = uECC_secp256r1();
+    sha256(result + 2, sizeof(result) - 4, h);
+    TEST_ASSERT(uECC_verify(ecc_key_pub, h, sizeof(h),
+			    data->block.buf + sizeof(result), curve) != 0);
 
     ndn_shared_block_release(data);
 }
@@ -1336,7 +1396,7 @@ static void test_ndn_data_get_content__valid(void)
 
 static void test_ndn_data_verify_signature__all(void)
 {
-    uint8_t buf[] = {
+    uint8_t buf[109] = {
 	NDN_TLV_DATA, 75,
 	NDN_TLV_NAME, 12,
 	NDN_TLV_NAME_COMPONENT, 1, 'a',
@@ -1368,10 +1428,59 @@ static void test_ndn_data_verify_signature__all(void)
     hmac_sha256(key, sizeof(key), (const unsigned*)(buf + 2), 41, buf + 45);
 
     TEST_ASSERT_EQUAL_INT(-1, ndn_data_verify_signature(&data, NULL, 0));
-    TEST_ASSERT_EQUAL_INT(0, ndn_data_verify_signature(&data, key, sizeof(key)));
-    buf[32] = 1;
-    TEST_ASSERT_EQUAL_INT(-1, ndn_data_verify_signature(&data, key, sizeof(key)));
+    TEST_ASSERT_EQUAL_INT(0, ndn_data_verify_signature(&data, key,
+						       sizeof(key)));
+    buf[70] = 0;
+    TEST_ASSERT_EQUAL_INT(-1, ndn_data_verify_signature(&data, key,
+							sizeof(key)));
+
+    uint8_t ecc_key_pri[] = { 0x38, 0x67, 0x54, 0x73, 0x8B, 0x72, 0x4C, 0xD6,
+			      0x3E, 0xBD, 0x52, 0xF3, 0x64, 0xD8, 0xF5, 0x7F,
+			      0xB5, 0xE6, 0xF2, 0x9F, 0xC2, 0x7B, 0xD6, 0x90,
+			      0x42, 0x9D, 0xC8, 0xCE, 0xF0, 0xDE, 0x75, 0xB3 };
+    uint8_t ecc_key_pub[] = { 0x2C, 0x3C, 0x18, 0xCB, 0x31, 0x88, 0x0B, 0xC3,
+			      0x73, 0xF4, 0x4A, 0xD4, 0x3F, 0x8C, 0x80, 0x24,
+			      0xD4, 0x8E, 0xBE, 0xB4, 0xAD, 0xF0, 0x69, 0xA6,
+			      0xFE, 0x29, 0x12, 0xAC, 0xC1, 0xE1, 0x26, 0x7E,
+			      0x2B, 0x25, 0x69, 0x02, 0xD5, 0x85, 0x51, 0x4B,
+			      0x91, 0xAC, 0xB9, 0xD1, 0x19, 0xE9, 0x5E, 0x97,
+			      0x20, 0xBB, 0x16, 0x2A, 0xD3, 0x2F, 0xB5, 0x11,
+			      0x1B, 0xD1, 0xAF, 0x76, 0xDB, 0xAD, 0xB8, 0xCE };
+
+    buf[1] += 32;
+    buf[42] = NDN_SIG_TYPE_ECDSA_SHA256;
+    buf[44] = 64;
+    uECC_Curve curve = uECC_secp256r1();
+    uint8_t h[32] = {0};
+    sha256(buf + 2, 41, h);
+    TEST_ASSERT(uECC_sign(ecc_key_pri, h, sizeof(h), buf + 45, curve) != 0);
+    TEST_ASSERT_EQUAL_INT(0, ndn_data_verify_signature(&data, ecc_key_pub,
+						       sizeof(ecc_key_pub)));
+    buf[70] = 0;
+    TEST_ASSERT_EQUAL_INT(-1, ndn_data_verify_signature(&data, ecc_key_pub,
+							sizeof(ecc_key_pub)));
 }
+
+/* static void test_ndn_data_ecc_try(void) */
+/* { */
+/*     uint8_t private[32] = {0}; */
+/*     uint8_t public[64] = {0}; */
+
+/*     uECC_Curve curve = uECC_secp256r1(); */
+/*     if (!uECC_make_key(public, private, curve)) { */
+/* 	printf("uECC_make_key() failed\n"); */
+/*     } */
+
+/*     printf("\nprivate:\n"); */
+/*     for (size_t i = 0; i < sizeof(private); ++i) { */
+/* 	printf("0x%02X, ", private[i]); */
+/*     } */
+
+/*     printf("\npublic:\n"); */
+/*     for (size_t i = 0; i < sizeof(public); ++i) { */
+/* 	printf("0x%02X, ", public[i]); */
+/*     } */
+/* } */
 
 Test *tests_ndn_encoding_data_tests(void)
 {
@@ -1382,6 +1491,7 @@ Test *tests_ndn_encoding_data_tests(void)
 	new_TestFixture(test_ndn_data_get_metainfo__valid),
 	new_TestFixture(test_ndn_data_get_content__valid),
         new_TestFixture(test_ndn_data_verify_signature__all),
+	    //new_TestFixture(test_ndn_data_ecc_try),
     };
 
     EMB_UNIT_TESTCALLER(ndn_encoding_data_tests, NULL, NULL, fixtures);

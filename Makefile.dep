@@ -316,6 +316,7 @@ ifneq (,$(filter ndn_encoding,$(USEMODULE)))
     USEMODULE += gnrc_pktbuf
     USEMODULE += random
     USEMODULE += hashes
+    USEPKG += micro-ecc
 endif
 
 ifneq (,$(filter newlib_nano,$(USEMODULE)))
