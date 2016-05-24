@@ -62,6 +62,7 @@ enum {
 /* signature type values */
 enum {
     NDN_SIG_TYPE_DIGEST_SHA256 = 0,
+    NDN_SIG_TYPE_ECDSA_SHA256  = 3,
     NDN_SIG_TYPE_HMAC_SHA256   = 4,
 };
 

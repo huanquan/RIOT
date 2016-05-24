@@ -224,7 +224,7 @@ ndn_shared_block_t* ndn_l2_frag_receive(kernel_pid_t iface,
 	    while (n != NULL) {
 		ps = p->data[0] & NDN_L2_FRAG_SEQ_MASK;
 		s = n->data[0] & NDN_L2_FRAG_SEQ_MASK;
-		if ((ps < seq) && (s > seq)) {
+		if (ps < seq && s > seq) {
 		    // insert after p and before n
 		    break;
 		}

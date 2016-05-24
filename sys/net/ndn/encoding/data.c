@@ -19,6 +19,7 @@
 
 #include "hashes/sha256.h"
 #include "net/gnrc/nettype.h"
+#include "uECC.h"
 
 #include "net/ndn/encoding/data.h"
 
@@ -28,15 +29,27 @@
 ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
 				    ndn_metainfo_t* metainfo,
 				    ndn_block_t* content,
-				    const unsigned char* hmac_key,
-				    size_t hmac_key_len)
+				    uint8_t sig_type,
+				    const unsigned char* key,
+				    size_t key_len)
 {
     if (name == NULL || name->buf == NULL || name->len <= 0 ||
 	metainfo == NULL || content == NULL || content->buf == NULL ||
 	content->len < 0)
 	return NULL;
 
-    if (hmac_key != NULL && hmac_key_len <= 0)
+    if (sig_type != NDN_SIG_TYPE_DIGEST_SHA256 &&
+	sig_type != NDN_SIG_TYPE_ECDSA_SHA256 &&
+	sig_type != NDN_SIG_TYPE_HMAC_SHA256)
+	return NULL;
+
+    if (sig_type != NDN_SIG_TYPE_DIGEST_SHA256 && key == NULL)
+	return NULL;
+
+    if (sig_type == NDN_SIG_TYPE_ECDSA_SHA256 && key_len != 32)
+	return NULL;
+
+    if (key != NULL && key_len <= 0)
 	return NULL;
 
     int ml = ndn_metainfo_total_length(metainfo);
@@ -45,6 +58,8 @@ ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
     int cl = ndn_block_total_length(NDN_TLV_CONTENT, content->len);
 
     int dl = name->len + ml + cl + 39;
+    if (sig_type == NDN_SIG_TYPE_ECDSA_SHA256)
+	dl += 32;  // ecc p256 signature length is 64 bytes
     if (dl > 253) return NULL;  //TODO: support multi-byte length field
 
     ndn_block_t data;
@@ -79,21 +94,41 @@ ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
     buf[1] = 3;
     buf[2] = NDN_TLV_SIGNATURE_TYPE;
     buf[3] = 1;
-    if (hmac_key == NULL)
-	buf[4] = NDN_SIG_TYPE_DIGEST_SHA256;
-    else
-	buf[4] = NDN_SIG_TYPE_HMAC_SHA256;
+    buf[4] = sig_type;
     buf += 5;
-    //TODO: support keylocator for HMAC signature
+    //TODO: support keylocator
 
     // Write signature value
     buf[0] = NDN_TLV_SIGNATURE_VALUE;
-    buf[1] = 32;
-    if (hmac_key == NULL)
-	sha256(data.buf + 2, dl - 34, buf + 2);
-    else
-	hmac_sha256(hmac_key, hmac_key_len,
-		    (const unsigned*)(data.buf + 2), dl - 34, buf + 2);
+
+    switch (sig_type) {
+	case NDN_SIG_TYPE_DIGEST_SHA256:
+	    buf[1] = 32;
+	    sha256(data.buf + 2, dl - 34, buf + 2);
+	    break;
+
+	case NDN_SIG_TYPE_HMAC_SHA256:
+	    buf[1] = 32;
+	    hmac_sha256(key, key_len, (const unsigned*)(data.buf + 2),
+			dl - 34, buf + 2);
+	    break;
+
+	case NDN_SIG_TYPE_ECDSA_SHA256:
+	{
+	    buf[1] = 64;
+	    uint8_t h[32] = {0};
+	    sha256(data.buf + 2, dl - 66, h);
+	    uECC_Curve curve = uECC_secp256r1();
+	    if (uECC_sign(key, h, sizeof(h), buf + 2, curve) == 0) {
+		free(buf);
+		return NULL;
+	    }
+	}
+	break;
+
+	default:
+	    break;
+    }
 
     ndn_shared_block_t* sd = ndn_shared_block_create_by_move(&data);
     if (sd == NULL) {
@@ -106,8 +141,9 @@ ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
 ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
 				     ndn_metainfo_t* metainfo,
 				     ndn_block_t* content,
-				     const unsigned char* hmac_key,
-				     size_t hmac_key_len)
+				     uint8_t sig_type,
+				     const unsigned char* key,
+				     size_t key_len)
 {
     if (name == NULL || metainfo == NULL || content == NULL)
 	return NULL;
@@ -115,7 +151,19 @@ ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
     if (content->buf == NULL || content->len < 0)
 	return NULL;
 
-    if (hmac_key != NULL && hmac_key_len <= 0)
+
+    if (sig_type != NDN_SIG_TYPE_DIGEST_SHA256 &&
+	sig_type != NDN_SIG_TYPE_ECDSA_SHA256 &&
+	sig_type != NDN_SIG_TYPE_HMAC_SHA256)
+	return NULL;
+
+    if (sig_type != NDN_SIG_TYPE_DIGEST_SHA256 && key == NULL)
+	return NULL;
+
+    if (sig_type == NDN_SIG_TYPE_ECDSA_SHA256 && key_len != 32)
+	return NULL;
+
+    if (key != NULL && key_len <= 0)
 	return NULL;
 
     int nl = ndn_name_total_length(name);
@@ -127,6 +175,8 @@ ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
     int cl = ndn_block_total_length(NDN_TLV_CONTENT, content->len);
 
     int dl = nl + ml + cl + 39;
+    if (sig_type == NDN_SIG_TYPE_ECDSA_SHA256)
+	dl += 32;  // ecc p256 signature length is 64 bytes
     if (dl > 253) return NULL;  //TODO: support multi-byte length field
 
     ndn_block_t data;
@@ -161,21 +211,41 @@ ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
     buf[1] = 3;
     buf[2] = NDN_TLV_SIGNATURE_TYPE;
     buf[3] = 1;
-    if (hmac_key == NULL)
-	buf[4] = NDN_SIG_TYPE_DIGEST_SHA256;
-    else
-	buf[4] = NDN_SIG_TYPE_HMAC_SHA256;
+    buf[4] = sig_type;
     buf += 5;
     //TODO: support keylocator for HMAC signature
 
     // Write signature value
     buf[0] = NDN_TLV_SIGNATURE_VALUE;
-    buf[1] = 32;
-    if (hmac_key == NULL)
-	sha256(data.buf + 2, dl - 34, buf + 2);
-    else
-	hmac_sha256(hmac_key, hmac_key_len,
-		    (const unsigned*)(data.buf + 2), dl - 34, buf + 2);
+
+    switch (sig_type) {
+	case NDN_SIG_TYPE_DIGEST_SHA256:
+	    buf[1] = 32;
+	    sha256(data.buf + 2, dl - 34, buf + 2);
+	    break;
+
+	case NDN_SIG_TYPE_HMAC_SHA256:
+	    buf[1] = 32;
+	    hmac_sha256(key, key_len, (const unsigned*)(data.buf + 2),
+			dl - 34, buf + 2);
+	    break;
+
+	case NDN_SIG_TYPE_ECDSA_SHA256:
+	{
+	    buf[1] = 64;
+	    uint8_t h[32] = {0};
+	    sha256(data.buf + 2, dl - 66, h);
+	    uECC_Curve curve = uECC_secp256r1();
+	    if (uECC_sign(key, h, sizeof(h), buf + 2, curve) == 0) {
+		free(buf);
+		return NULL;
+	    }
+	}
+	break;
+
+	default:
+	    break;
+    }
 
     ndn_shared_block_t* sd = ndn_shared_block_create_by_move(&data);
     if (sd == NULL) {
@@ -441,7 +511,8 @@ int ndn_data_verify_signature(ndn_block_t* block,
     len -= l;
 
     if (algorithm != NDN_SIG_TYPE_DIGEST_SHA256 &&
-	algorithm != NDN_SIG_TYPE_HMAC_SHA256) {
+	algorithm != NDN_SIG_TYPE_HMAC_SHA256 &&
+	algorithm != NDN_SIG_TYPE_ECDSA_SHA256) {
 	DEBUG("ndn_encoding: unknown signature type, cannot verify\n");
 	return -1;
     }
@@ -459,37 +530,69 @@ int ndn_data_verify_signature(ndn_block_t* block,
     buf += l;
     len -= l;
 
-    if (num != 32) {
-	DEBUG("ndn_encoding: invalid signature value length (%u)\n", num);
-	return -1;
-    }
-
-    uint8_t sig[32];
-    memset(sig, 0, 32);
     /* verify signature */
     switch (algorithm) {
 	case NDN_SIG_TYPE_DIGEST_SHA256:
-	    sha256(sig_start, sig_value.buf - sig_start, sig);
-	    if (memcmp(sig, sig_value.buf + 2, sizeof(sig)) != 0) {
+	{
+	    if (num != 32) {
+		DEBUG("ndn_encoding: invalid digest sig value length (%u)\n",
+		      num);
+		return -1;
+	    }
+	    uint8_t h[32] = {0};
+	    sha256(sig_start, sig_value.buf - sig_start, h);
+	    if (memcmp(h, sig_value.buf + 2, sizeof(h)) != 0) {
 		DEBUG("ndn_encoding: fail to verify DigestSha256 signature\n");
 		return -1;
 	    }
 	    else
 		return 0;
+	}
 
 	case NDN_SIG_TYPE_HMAC_SHA256:
+	{
+	    if (num != 32) {
+		DEBUG("ndn_encoding: invalid hmac sig value length (%u)\n",
+		      num);
+		return -1;
+	    }
+	    uint8_t h[32] = {0};
 	    if (key == NULL || key_len <= 0) {
 		DEBUG("ndn_encoding: no hmac key, cannot verify signature\n");
 		return -1;
 	    }
 	    hmac_sha256(key, key_len, (const unsigned*)sig_start,
-			sig_value.buf - sig_start, sig);
-	    if (memcmp(sig, sig_value.buf + 2, sizeof(sig)) != 0) {
+			sig_value.buf - sig_start, h);
+	    if (memcmp(h, sig_value.buf + 2, sizeof(h)) != 0) {
 		DEBUG("ndn_encoding: fail to verify HMAC_SHA256 signature\n");
 		return -1;
 	    }
 	    else
 		return 0;
+	}
+
+	case NDN_SIG_TYPE_ECDSA_SHA256:
+	{
+	    if (num != 64) {
+		DEBUG("ndn_encoding: invalid ecdsa sig value length (%u)\n",
+		      num);
+		return -1;
+	    }
+	    if (key == NULL || key_len != 64) {
+		DEBUG("ndn_encoding: invalid ecdsa key\n");
+		return -1;
+	    }
+	    uint8_t h[32] = {0};
+	    sha256(sig_start, sig_value.buf - sig_start, h);
+	    uECC_Curve curve = uECC_secp256r1();
+	    if (uECC_verify(key, h, sizeof(h),
+			    sig_value.buf + 2, curve) == 0) {
+		DEBUG("ndn_encoding: fail to verify ECDSA_SHA256 signature\n");
+		return -1;
+	    }
+	    else
+		return 0;
+	}
 
 	default:
 	    break;
