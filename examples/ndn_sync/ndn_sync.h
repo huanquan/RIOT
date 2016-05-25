@@ -1,5 +1,5 @@
-#ifndef _NDN_SYNC
-#define _NDN_SYNC
+#ifndef _NDN_SYNC_H_
+#define _NDN_SYNC_H_
 
 #include "net/ndn/app.h"
 #include "net/ndn/ndn.h"
@@ -49,7 +49,9 @@ ndn_name_component_t sync_pfx = { (uint8_t*)"vsync", 5 };
  * @return  @p data packet, if success.
  * @return  NULL, otherwise.
  */
-ndn_shared_block_t* ndn_sync_publish_data(ndn_app_t* handler, ndn_sync_t* node, ndn_metainfo_t* metainfo, ndn_block_t* content);
+ndn_shared_block_t* ndn_sync_publish_data(ndn_app_t* handler, ndn_sync_t* node,
+                                          ndn_metainfo_t* metainfo,
+                                          ndn_block_t* content);
 
 /**
  * @brief   process received sync interest, update states and fetch missing data.
@@ -64,7 +66,8 @@ ndn_shared_block_t* ndn_sync_publish_data(ndn_app_t* handler, ndn_sync_t* node, 
  * @return  1, if the interest is in a bad format.
  * @return  2, if fail to fetch missing data.
  */
-int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* si);
+int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node,
+                                   ndn_block_t* si);
 
 /**
  * @brief   process received data, update states and fetch missing data storing
@@ -80,6 +83,7 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
  * @return  1, if the data is in a bad format.
  * @return  2, if fail to fetch missing data.
  */
-int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* data);
+int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node,
+                          ndn_block_t* data);
 
-#endif
+#endif  // _NDN_SYNC_H_
