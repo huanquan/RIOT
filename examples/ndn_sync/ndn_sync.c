@@ -263,8 +263,10 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
             return EXIT_NOSPACE;
     }
     
-    node->ldi[i].rn = rn;
-    node->ldi[i].sn = sn;
+    if (node->ldi[i].rn < rn || (node->ldi[i].rn == rn && node->ldi[i].sn < sn)) {  // when updating states, ignore long delayed packets
+        node->ldi[i].rn = rn;
+        node->ldi[i].sn = sn;
+    }
     
     return EXIT_SUCCESS;
 }
