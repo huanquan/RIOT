@@ -72,7 +72,7 @@ ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
                                            ndn_metainfo_t* metainfo,
                                            ndn_block_t* content)
 {
-    if (handler == NULL || node == NULL || metainfo == NULL || content == NULL)
+    if (handler == NULL || node == NULL || metainfo == NULL || content == NULL || content->buf == NULL)
         return NULL;
 
     // perform round change
@@ -86,7 +86,7 @@ ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
     
     ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(&(node->pfx[node->idx]), node->rn);
     if (pfx_rn == NULL) return NULL;
-    ndn_shared_block_t* name = ndn_name_append(&(pfx_rn->block), node->vv, node->num_node);
+    ndn_shared_block_t* name = ndn_name_append_uint8(&(pfx_rn->block), node->vv[node->idx]);
     ndn_shared_block_release(pfx_rn);
     if (name == NULL) return NULL;
     
