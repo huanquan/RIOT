@@ -232,6 +232,8 @@ static int _get_node_index_by_pfx(ndn_sync_t* node, ndn_name_component_t* pfx)
 
 int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* data)
 {
+    if (handler == NULL || node == NULL || data == NULL || data->buf == NULL) return EXIT_BADFMT;
+    
     ndn_name_component_t pfx;
     ndn_block_t d_name, d_content;
     uint8_t sn;
@@ -246,6 +248,7 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
         return EXIT_BADFMT;
     
     i = _get_node_index_by_pfx(node, &pfx);
+    if (i >= (int)node->num_node) return EXIT_BADFMT;    // if none of the prefixes matches the one in the name
     
     if (ndn_data_get_content(data, &d_content) < 0) return EXIT_BADFMT;
     
