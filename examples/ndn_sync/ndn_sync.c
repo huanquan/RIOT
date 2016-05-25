@@ -6,16 +6,6 @@
 #include "random.h"
 #include "ndn_sync.h"
 
-#define FIRST_SEQ_NUM 1
-#define MAX_SEQ_NUM 255
-#define MAX_NAME_LEN 255
-#define TIME_SEC 1000
-
-#define EXIT_SUCCESS 0
-#define EXIT_BADFMT 1
-#define EXIT_NOSPACE 2
-
-
 static int ndn_sync_send_interest(ndn_app_t* handler, ndn_name_component_t* pfx, uint32_t rn, uint8_t* vv, size_t num_node)
 {
     ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(pfx, rn);
