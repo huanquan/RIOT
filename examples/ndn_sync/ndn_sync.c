@@ -1,3 +1,7 @@
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
@@ -6,14 +10,15 @@
 #include "random.h"
 #include "ndn_sync.h"
 
+extern ndn_name_component_t sync_pfx;
+
 static int ndn_sync_send_interest(ndn_app_t* handler, ndn_name_component_t* pfx, uint32_t rn, uint8_t* vv, size_t num_node)
 {
     ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(pfx, rn);
     ndn_shared_block_t* name = ndn_name_append(&(pfx_rn->block), vv, num_node);
-    ndn_shared_block_release(pfx);
     ndn_shared_block_release(pfx_rn);
     
-    if (ndn_app_express_interest(&(name->block), NULL, TIME_SEC, NULL, NULL) < 0) return EXIT_NOSPACE;
+    if (ndn_app_express_interest(handler, &(name->block), NULL, TIME_SEC, NULL, NULL) < 0) return EXIT_NOSPACE;
     return EXIT_SUCCESS;
 }
 
@@ -40,7 +45,8 @@ static int ndn_sync_add_piggyback(ndn_block_t* content, vn_t* last_vn)
     buf += l;
     
     memcpy(buf, content->buf, content->len);
-    free(content->buf);
+    
+    free((uint8_t*)(content->buf));
     content->buf = buf;
     content->len = pl;
     
@@ -50,7 +56,7 @@ static int ndn_sync_add_piggyback(ndn_block_t* content, vn_t* last_vn)
 
 ndn_shared_block_t* ndn_sync_publish_data(ndn_app_t* handler, ndn_sync_t* node, ndn_metainfo_t* metainfo, ndn_block_t* content)
 {
-    if (handler == NULL || node == NULL || metainfo == NULL || content == NULL) return NULL
+    if (handler == NULL || node == NULL || metainfo == NULL || content == NULL) return NULL;
 
     // perform round change
     if (node->vv[node->idx] == MAX_SEQ_NUM)
@@ -78,13 +84,13 @@ ndn_shared_block_t* ndn_sync_publish_data(ndn_app_t* handler, ndn_sync_t* node, 
         }
     }
     
-    ndn_sync_send_interest(handler, &(sync_pfx->block), node->rn, node->vv, node->num_node);
+    ndn_sync_send_interest(handler, &(sync_pfx), node->rn, node->vv, node->num_node);
     
     // update last packet
     node->ldi[node->idx].rn = node->rn;
     node->ldi[node->idx].sn = node->vv[node->idx];
     
-    ndn_shared_block_t* data = ndn_data_create(&(name->block), metainfo, content, NULL, 0);
+    ndn_shared_block_t* data = ndn_data_create(&(name->block), metainfo, content, NDN_SIG_TYPE_DIGEST_SHA256, NULL, 0);
     ndn_shared_block_release(name);
     
     return data;
@@ -106,8 +112,6 @@ static void ndn_sync_merge(uint8_t* lhs, uint8_t* rhs1, uint8_t* rhs2, size_t le
 static int ndn_sync_extract_fields(ndn_block_t* name, ndn_name_component_t* pfx, uint32_t* rn, uint8_t* vv, size_t num_node)
 {
     ndn_name_component_t tmp;
-    uint32_t num;
-    int l;
 
     if (pfx != NULL)
     {
@@ -118,19 +122,19 @@ static int ndn_sync_extract_fields(ndn_block_t* name, ndn_name_component_t* pfx,
     {
         if (ndn_name_get_component_from_block(name, 1, &tmp) < 0) return EXIT_BADFMT;
         
-        if (tmp->len != sizeof(uint32_t)) return EXIT_BADFMT;
-        memcpy(rn, tmp->buf, tmp->len);
+        if (tmp.len != sizeof(uint32_t)) return EXIT_BADFMT;
+        memcpy(rn, tmp.buf, tmp.len);
     }
     
-    free(tmp->buf);
-    tmp->buf = NULL:
+    free((uint8_t*)tmp.buf);
+    tmp.buf = NULL;
     
     if (vv != NULL)
     {
         if (ndn_name_get_component_from_block(name, 2, &tmp) < 0) return EXIT_BADFMT;
         
-        if (tmp->len != num_node) return EXIT_BADFMT;
-        memcpy(vv, tmp->buf, tmp->len);
+        if (tmp.len != (int)num_node) return EXIT_BADFMT;
+        memcpy(vv, tmp.buf, tmp.len);
     }
     
     return EXIT_SUCCESS;
@@ -162,7 +166,7 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
     if (handler == NULL || node == NULL || interest == NULL) return EXIT_BADFMT;
     
     uint32_t rn;
-    uint8_t vv[MAX_NODE_NUM], old_vv[MAX_NODE_NUM], sn;
+    uint8_t vv[MAX_NODE_NUM], old_vv[MAX_NODE_NUM];
     ndn_block_t i_name;
     
     size_t i;
@@ -172,7 +176,7 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
         return EXIT_BADFMT;
     }
     
-    if (ndn_sync_extract_fields(i_name, NULL, &rn, vv, node->num_node) != EXIT_SUCCESS)
+    if (ndn_sync_extract_fields(&i_name, NULL, &rn, vv, node->num_node) != EXIT_SUCCESS)
     {
         return EXIT_BADFMT;
     }
@@ -188,7 +192,8 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
     
     for (i = 0; i < node->num_node; i++)
     {
-        if(ndn_sync_check_missing_data(handler, &(node->pfx[i]), {rn, old_vv[i]}, {rn, vv[i]}) != EXIT_SUCCESS)
+        vn_t old_vn = {rn, old_vv[i]}, vn = {rn, vv[i]};
+        if(ndn_sync_check_missing_data(handler, &(node->pfx[i]), old_vn, vn) != EXIT_SUCCESS)
         {
             return EXIT_NOSPACE;
         }
@@ -217,10 +222,10 @@ static int ndn_sync_get_piggyback(ndn_block_t* content, vn_t* vn)
 
 static int ndn_sync_get_node_index_by_pfx(ndn_sync_t* node, ndn_name_component_t* pfx)
 {
-    int i;
+    size_t i;
     for (i = 0; i < node->num_node; i++)
     {
-        if (ndn_name_component_compare(pfx, node->pfx[i]) == 0) break;
+        if (ndn_name_component_compare(pfx, &(node->pfx[i])) == 0) break;
     }
     return i;
 }
@@ -237,7 +242,7 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     
     if (ndn_data_get_name(data, &d_name) < 0) return EXIT_BADFMT;
     
-    if (ndn_sync_extract_fields(d_name, &pfx, &rn, &sn, 1) != EXIT_SUCCESS)
+    if (ndn_sync_extract_fields(&d_name, &pfx, &rn, &sn, 1) != EXIT_SUCCESS)
     {
         return EXIT_BADFMT;
     }
@@ -258,4 +263,8 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     
     return EXIT_SUCCESS;
 }
+
+#ifdef __cplusplus
+}
+#endif
 

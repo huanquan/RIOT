@@ -32,7 +32,7 @@ typedef struct {
     vn_t ldi[MAX_NODE_NUM]; // last received data
 } ndn_sync_t;
 
-extern ndn_name_component_t sync_pfx = { (uint8_t*)"vsync", 5 };
+ndn_name_component_t sync_pfx = { (uint8_t*)"vsync", 5 };
 
 
 /**
