@@ -35,11 +35,9 @@ ndn_shared_block_t* ndn_interest_create(ndn_block_t* name, void* selectors,
     // Get length of the lifetime value
     int lt_len = ndn_block_integer_length(lifetime);
 
-    if (name->len + lt_len + 8 > 253)
-	return NULL;  //TODO: support multi-byte length field.
-
     ndn_block_t inst;
-    inst.len = 10 + name->len + lt_len;
+    int inst_len = name->len + lt_len + 8;
+    inst.len = ndn_block_total_length(NDN_TLV_INTEREST, inst_len);
     uint8_t* buf = (uint8_t*)malloc(inst.len);
     if (buf == NULL) {
 	DEBUG("ndn_encoding: cannot allocate memory for interest block\n");
@@ -47,13 +45,17 @@ ndn_shared_block_t* ndn_interest_create(ndn_block_t* name, void* selectors,
     }
     inst.buf = buf;
 
-    // Fill in the Interest header and name field.
+    // Fill in the Interest header.
     buf[0] = NDN_TLV_INTEREST;
-    buf[1] = inst.len - 2;
-    memcpy(buf + 2, name->buf, name->len);
+    int l = ndn_block_put_var_number(inst_len, buf + 1, inst.len - 1);
+    buf += l + 1;
+    assert(inst.len == inst_len + 1 + l);
+
+    // Fill in the name.
+    memcpy(buf, name->buf, name->len);
+    buf += name->len;
     
     // Fill in the nonce.
-    buf += name->len + 2;
     uint32_t nonce = random_uint32();
     buf[0] = NDN_TLV_NONCE;
     buf[1] = 4;  // Nonce field length
@@ -89,11 +91,9 @@ ndn_shared_block_t* ndn_interest_create2(ndn_name_t* name, void* selectors,
     // Get length of the lifetime value
     int lt_len = ndn_block_integer_length(lifetime);
 
-    if (name_len + lt_len + 8 > 253)
-	return NULL;  //TODO: support multi-byte length field.
-
     ndn_block_t inst;
-    inst.len = 10 + name_len + lt_len;
+    int inst_len = name_len + lt_len + 8;
+    inst.len = ndn_block_total_length(NDN_TLV_INTEREST, inst_len);
     uint8_t* buf = (uint8_t*)malloc(inst.len);
     if (buf == NULL) {
 	DEBUG("ndn_encoding: cannot allocate memory for interest block\n");
@@ -101,13 +101,17 @@ ndn_shared_block_t* ndn_interest_create2(ndn_name_t* name, void* selectors,
     }
     inst.buf = buf;
 
-    // Fill in the Interest header and name field.
+    // Fill in the Interest header.
     buf[0] = NDN_TLV_INTEREST;
-    buf[1] = inst.len - 2;
-    ndn_name_wire_encode(name, buf + 2, name_len);
-    
+    int l = ndn_block_put_var_number(inst_len, buf + 1, inst.len - 1);
+    buf += l + 1;
+    assert(inst.len == inst_len + 1 + l);
+
+    // Fill in the name.
+    ndn_name_wire_encode(name, buf, name_len);
+    buf += name_len;
+
     // Fill in the nonce.
-    buf += name_len + 2;
     uint32_t nonce = random_uint32();
     buf[0] = NDN_TLV_NONCE;
     buf[1] = 4;  // Nonce field length

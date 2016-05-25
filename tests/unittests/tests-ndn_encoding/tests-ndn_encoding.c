@@ -579,6 +579,33 @@ static void test_ndn_name_from_uri__valid(void)
     TEST_ASSERT_EQUAL_INT(sizeof(res5), shared->block.len);
     TEST_ASSERT(0 == memcmp(res5, shared->block.buf, sizeof(res5)));
     ndn_shared_block_release(shared);
+
+    char str6[500] = {0};
+    str6[0] = '/';
+    for (int i = 1; i < 497; ++i)
+	str6[i] = 'a';
+    str6[497] = '/';
+    str6[498] = 'b';
+    str6[499] = 0;
+    uint8_t res6[507] = {0};
+    res6[0] = NDN_TLV_NAME;
+    res6[1] = 253;
+    res6[2] = 0x01;
+    res6[3] = 0xF7;
+    res6[4] = NDN_TLV_NAME_COMPONENT;
+    res6[5] = 253;
+    res6[6] = 0x01;
+    res6[7] = 0xF0;
+    for (int i = 8; i < 504; ++i)
+	res6[i] = 'a';
+    res6[504] = NDN_TLV_NAME_COMPONENT;
+    res6[505] = 1;
+    res6[506] = 'b';
+    shared = ndn_name_from_uri(str6, strlen(str6));
+    TEST_ASSERT_NOT_NULL(shared);
+    TEST_ASSERT_EQUAL_INT(sizeof(res6), shared->block.len);
+    TEST_ASSERT(0 == memcmp(res6, shared->block.buf, sizeof(res6)));
+    ndn_shared_block_release(shared);
 }
 
 static void test_ndn_name_append__all(void)
@@ -607,6 +634,33 @@ static void test_ndn_name_append__all(void)
     TEST_ASSERT(0 == memcmp(res, shared->block.buf, sizeof(res)));
     ndn_shared_block_release(shared);
 
+    uint8_t buf2[500];
+    memset(buf2, 'd', sizeof(buf2));
+    uint8_t res2[517];
+    res2[0] = NDN_TLV_NAME;
+    res2[1] = 253;
+    res2[2] = 0x02;
+    res2[3] = 0x01;
+    res2[4] = NDN_TLV_NAME_COMPONENT;
+    res2[5] = 1;
+    res2[6] = 'a';
+    res2[7] = NDN_TLV_NAME_COMPONENT;
+    res2[8] = 1;
+    res2[9] = 'b';
+    res2[10] = NDN_TLV_NAME_COMPONENT;
+    res2[11] = 1;
+    res2[12] = 'c';
+    res2[13] = NDN_TLV_NAME_COMPONENT;
+    res2[14] = 253;
+    res2[15] = 0x01;
+    res2[16] = 0xF4;
+    for (int i = 17; i < 517; ++i)
+	res2[i] = 'd';
+    shared = ndn_name_append(&nb, buf2, sizeof(buf2));
+    TEST_ASSERT_NOT_NULL(shared);
+    TEST_ASSERT_EQUAL_INT(sizeof(res2), shared->block.len);
+    TEST_ASSERT(0 == memcmp(res2, shared->block.buf, sizeof(res2)));
+    ndn_shared_block_release(shared);
 }
 
 static void test_ndn_name_get_size_from_block__invalid(void)

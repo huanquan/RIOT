@@ -60,10 +60,9 @@ ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
     int dl = name->len + ml + cl + 39;
     if (sig_type == NDN_SIG_TYPE_ECDSA_SHA256)
 	dl += 32;  // ecc p256 signature length is 64 bytes
-    if (dl > 253) return NULL;  //TODO: support multi-byte length field
 
     ndn_block_t data;
-    data.len = dl + 2;
+    data.len = ndn_block_total_length(NDN_TLV_DATA, dl);
     uint8_t* buf = (uint8_t*)malloc(data.len);
     if (buf == NULL) {
 	DEBUG("ndn_encoding: cannot allocate memory for data block\n");
@@ -73,11 +72,13 @@ ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
 
     // Write data type and length
     buf[0] = NDN_TLV_DATA;
-    buf[1] = dl;
+    int l = ndn_block_put_var_number(dl, buf + 1, data.len - 1);
+    buf += l + 1;
+    assert(data.len == dl + 1 + l);
 
     // Write name
-    memcpy(buf + 2, name->buf, name->len);
-    buf += name->len + 2;
+    memcpy(buf, name->buf, name->len);
+    buf += name->len;
 
     // Write metainfo
     ndn_metainfo_wire_encode(metainfo, buf, ml);
@@ -85,9 +86,10 @@ ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
 
     // Write content
     buf[0] = NDN_TLV_CONTENT;
-    buf[1] = content->len;
-    memcpy(buf + 2, content->buf, content->len);
-    buf += content->len + 2;
+    l = ndn_block_put_var_number(content->len, buf + 1, dl - name->len - ml);
+    buf += l + 1;
+    memcpy(buf, content->buf, content->len);
+    buf += content->len;
 
     // Write signature info
     buf[0] = NDN_TLV_SIGNATURE_INFO;
@@ -177,10 +179,9 @@ ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
     int dl = nl + ml + cl + 39;
     if (sig_type == NDN_SIG_TYPE_ECDSA_SHA256)
 	dl += 32;  // ecc p256 signature length is 64 bytes
-    if (dl > 253) return NULL;  //TODO: support multi-byte length field
 
     ndn_block_t data;
-    data.len = dl + 2;
+    data.len = ndn_block_total_length(NDN_TLV_DATA, dl);
     uint8_t* buf = (uint8_t*)malloc(data.len);
     if (buf == NULL) {
 	DEBUG("ndn_encoding: cannot allocate memory for data block\n");
@@ -190,11 +191,13 @@ ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
 
     // Write data type and length
     buf[0] = NDN_TLV_DATA;
-    buf[1] = dl;
+    int l = ndn_block_put_var_number(dl, buf + 1, data.len - 1);
+    buf += l + 1;
+    assert(data.len == dl + 1 + l);
 
     // Write name
-    ndn_name_wire_encode(name, buf + 2, nl);
-    buf += nl + 2;
+    ndn_name_wire_encode(name, buf, nl);
+    buf += nl;
 
     // Write metainfo
     ndn_metainfo_wire_encode(metainfo, buf, ml);
@@ -202,9 +205,10 @@ ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
 
     // Write content
     buf[0] = NDN_TLV_CONTENT;
-    buf[1] = content->len;
-    memcpy(buf + 2, content->buf, content->len);
-    buf += content->len + 2;
+    l = ndn_block_put_var_number(content->len, buf + 1, dl - nl - ml);
+    buf += l + 1;
+    memcpy(buf, content->buf, content->len);
+    buf += content->len;
 
     // Write signature info
     buf[0] = NDN_TLV_SIGNATURE_INFO;
