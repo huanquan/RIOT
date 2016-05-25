@@ -140,18 +140,12 @@ static int _extract_fields(ndn_block_t* name, ndn_name_component_t* pfx,
 
 
 static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
-                               vn_t old_vn, vn_t vn)
+                               uint32_t rn, uint8_t old_sn, uint8_t sn)
 {
-    for (; old_vn.rn < vn.rn; old_vn.rn++) {
-        for (old_vn.sn++; old_vn.sn < MAX_SEQ_NUM; old_vn.sn++) {
-            if (_send_interest(handler, pfx, old_vn.rn, &(old_vn.sn), 1) != EXIT_SUCCESS)
-                return EXIT_NOSPACE;
-        }
-        old_vn.sn = 0;
-    }
-    
-    for (; old_vn.sn <= vn.sn; old_vn.sn++) {
-        if (_send_interest(handler, pfx, old_vn.rn, &(old_vn.sn), 1) != EXIT_SUCCESS)
+    if (old_sn == MAX_SEQ_NUM) return EXIT_SUCCESS;
+    // retrieve data in (old_sn, sn]
+    for (old_sn++; old_sn <= sn; old_sn++) {
+        if (_send_interest(handler, pfx, rn, &old_sn, 1) != EXIT_SUCCESS)
             return EXIT_NOSPACE;
     }
     
@@ -184,8 +178,7 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
     _merge(node->vv, vv, node->vv, node->num_node);
     
     for (i = 0; i < node->num_node; i++) {
-        vn_t old_vn = {rn, old_vv[i]}, vn = {rn, vv[i]};
-        if(_check_missing_data(handler, &(node->pfx[i]), old_vn, vn) != EXIT_SUCCESS)
+        if(_check_missing_data(handler, &(node->pfx[i]), rn, old_vv[i], vv[i]) != EXIT_SUCCESS)
             return EXIT_NOSPACE;
     }
     
@@ -243,7 +236,11 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     if (sn == FIRST_SEQ_NUM) {
         if (_get_piggyback(&d_content, &pg_vn) != EXIT_SUCCESS)
             return EXIT_BADFMT;
-        if (_check_missing_data(handler, &pfx, node->ldi[i], pg_vn) != EXIT_SUCCESS)
+            
+        if (node->ldi[i].rn != pg_vn.rn)    // either out-of-date data (>) or missing too much data (<)
+            return EXIT_NOSPACE;
+            
+        if (_check_missing_data(handler, &pfx, pg_vn.rn, node->ldi[i].sn, pg_vn.sn) != EXIT_SUCCESS)
             return EXIT_NOSPACE;
     }
     
