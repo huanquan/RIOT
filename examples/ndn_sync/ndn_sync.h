@@ -36,6 +36,20 @@ ndn_name_component_t sync_pfx = { (uint8_t*)"vsync", 5 };
 
 
 /**
+ * @brief   Initiate states of sync protocol, setting vv, rn, ldi to 0
+ *
+ * @details This function is reentrant and can be called from multiple threads.
+ *
+ * @param[in]  node       State machine of sync protocol.
+ * @param[in]  idx        Index of current node in its group.
+ * @param[in]  num_node   Number of registered nodes in the group.
+ *
+ * @return  0, always succeed.
+ */
+int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node);
+
+
+/**
  * @brief   construct data packet for publishing and broadcast sync interests
  *          to notify others the change
  *

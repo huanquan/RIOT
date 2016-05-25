@@ -12,6 +12,20 @@ extern "C" {
 
 extern ndn_name_component_t sync_pfx;
 
+
+int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node)
+{
+    node->idx = idx;
+    node->num_node = num_node;
+    node->rn = 0;
+    memset(node->vv, 0, num_node);
+    memset(node->ldi, 0, num_node * sizeof(vn_t));
+    return EXIT_SUCCESS;
+}
+
+
+/***********************************************************************************/
+
 static int _send_interest(ndn_app_t* handler, ndn_name_component_t* pfx,
                           uint32_t rn, uint8_t* vv, size_t num_node)
 {
