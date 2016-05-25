@@ -30,8 +30,10 @@ static int _send_interest(ndn_app_t* handler, ndn_name_component_t* pfx,
                           uint32_t rn, uint8_t* vv, size_t num_node)
 {
     ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(pfx, rn);
+    if (pfx_rn == NULL) return EXIT_BADFMT;
     ndn_shared_block_t* name = ndn_name_append(&(pfx_rn->block), vv, num_node);
     ndn_shared_block_release(pfx_rn);
+    if (name == NULL) return EXIT_BADFMT;
     
     // Ack is ignored
     if (ndn_app_express_interest(handler, &(name->block), NULL, TIME_SEC, NULL, NULL) < 0)
@@ -156,7 +158,7 @@ static int _extract_fields(ndn_block_t* name, ndn_name_component_t* pfx,
 static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
                                uint32_t rn, uint8_t old_sn, uint8_t sn)
 {
-    if (old_sn == MAX_SEQ_NUM) return EXIT_SUCCESS;
+    if (old_sn == MAX_SEQ_NUM) return EXIT_SUCCESS; // avoid math overflow
     // retrieve data in (old_sn, sn]
     for (old_sn++; old_sn <= sn; old_sn++) {
         if (_send_interest(handler, pfx, rn, &old_sn, 1) != EXIT_SUCCESS)
@@ -177,7 +179,7 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
     
     size_t i;
     
-    if (ndn_interest_get_name(interest, &i_name) != EXIT_SUCCESS)
+    if (ndn_interest_get_name(interest, &i_name) < 0)
         return EXIT_BADFMT;
     
     if (_extract_fields(&i_name, NULL, &rn, vv, node->num_node) != EXIT_SUCCESS)
