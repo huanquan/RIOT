@@ -94,12 +94,10 @@ ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
     
     
     if (node->vv[node->idx] == FIRST_SEQ_NUM)  {
-        node->lr_vn = node->ldi[node->idx];
-    }
-    
-    if (_add_piggyback(&(node->lr_vn), content) != EXIT_SUCCESS) {
-        ndn_shared_block_release(name);
-        return NULL;
+        if (_add_piggyback(&(node->ldi[node->idx]), content) != EXIT_SUCCESS) {
+            ndn_shared_block_release(name);
+            return NULL;
+        }
     }
     
     _send_interest(handler, &(sync_pfx), node->rn, node->vv, node->num_node);
@@ -254,7 +252,7 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     
     if (ndn_data_get_content(data, &d_content) < 0) return EXIT_BADFMT;
     
-    if (node->ldi[i].rn < rn) {
+    if (sn == FIRST_SEQ_NUM) {
         if (_get_piggyback(&d_content, &pg_vn) != EXIT_SUCCESS)
             return EXIT_BADFMT;
             

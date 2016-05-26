@@ -30,8 +30,6 @@ typedef struct {
     uint8_t vv[MAX_NODE_NUM];    // version vector
     ndn_name_component_t pfx[MAX_NODE_NUM]; // list of data prefixes
     vn_t ldi[MAX_NODE_NUM]; // last received data
-    
-    vn_t lr_vn;
 } ndn_sync_t;
 
 ndn_name_component_t sync_pfx = { (uint8_t*)"vsync", 5 };
