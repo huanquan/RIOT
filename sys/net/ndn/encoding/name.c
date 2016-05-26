@@ -363,11 +363,9 @@ int ndn_name_get_size_from_block(ndn_block_t* block)
     int l;
 
     /* read name type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_NAME) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_NAME) return -1;
+    buf += 1;
+    len -= 1;
 
     /* read name length */
     l = ndn_block_get_var_number(buf, len, &num);
@@ -383,12 +381,9 @@ int ndn_name_get_size_from_block(ndn_block_t* block)
 
     while (len > 0) {
 	/* read name component type */
-	l = ndn_block_get_var_number(buf, len, &num);
-	if (l < 0) return -1;
-
-	if (num != NDN_TLV_NAME_COMPONENT) return -1;
-	buf += l;
-	len -= l;
+	if (*buf != NDN_TLV_NAME_COMPONENT) return -1;
+	buf += 1;
+	len -= 1;
 
 	++res;
 
@@ -396,8 +391,8 @@ int ndn_name_get_size_from_block(ndn_block_t* block)
 	num = 0;
 	l = ndn_block_get_var_number(buf, len, &num);
 	if (l < 0) return -1;
-	buf += (l + num);
-	len -= (l + num);
+	buf += l + (int)num;
+	len -= l + (int)num;
     }
 
     assert(len == 0);
@@ -418,11 +413,9 @@ int ndn_name_get_component_from_block(ndn_block_t* block, int pos,
     int l;
 
     /* read name type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_NAME) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_NAME) return -1;
+    buf += 1;
+    len -= 1;
 
     /* read name length */
     l = ndn_block_get_var_number(buf, len, &num);
@@ -438,12 +431,9 @@ int ndn_name_get_component_from_block(ndn_block_t* block, int pos,
 
     while (len > 0) {
 	/* read name component type */
-	l = ndn_block_get_var_number(buf, len, &num);
-	if (l < 0) return -1;
-
-	if (num != NDN_TLV_NAME_COMPONENT) return -1;
-	buf += l;
-	len -= l;
+	if (*buf != NDN_TLV_NAME_COMPONENT) return -1;
+	buf += 1;
+	len -= 1;
 
 	/* read name component length and skip value */
 	num = 0;
@@ -482,18 +472,14 @@ int ndn_name_compare_block(ndn_block_t* lhs, ndn_block_t* rhs)
     int l;
 
     /* check left name type */
-    l = ndn_block_get_var_number(lbuf, llen, &num);
-    if (l < 0) return 3;
-    if (num != NDN_TLV_NAME) return 3;
-    lbuf += l;
-    llen -= l;
+    if (*lbuf != NDN_TLV_NAME) return 3;
+    lbuf += 1;
+    llen -= 1;
 
     /* check right name type */
-    l = ndn_block_get_var_number(rbuf, rlen, &num);
-    if (l < 0) return -3;
-    if (num != NDN_TLV_NAME) return -3;
-    rbuf += l;
-    rlen -= l;
+    if (*rbuf != NDN_TLV_NAME) return -3;
+    rbuf += 1;
+    rlen -= 1;
 
     /* read left name length */
     l = ndn_block_get_var_number(lbuf, llen, &num);
@@ -544,11 +530,9 @@ void ndn_name_print(ndn_block_t* block)
     int l;
 
     /* read name type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return;
-    if (num != NDN_TLV_NAME) return;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_NAME) return;
+    buf += 1;
+    len -= 1;
 
     /* read and ignore name length */
     l = ndn_block_get_var_number(buf, len, &num);
@@ -558,11 +542,9 @@ void ndn_name_print(ndn_block_t* block)
 
     while (len > 0) {
 	/* read name component type */
-	l = ndn_block_get_var_number(buf, len, &num);
-	if (l < 0) return;
-	if (num != NDN_TLV_NAME_COMPONENT) return;
-	buf += l;
-	len -= l;
+	if (*buf != NDN_TLV_NAME_COMPONENT) return;
+	buf += 1;
+	len -= 1;
 
 	/* read name component length */
 	l = ndn_block_get_var_number(buf, len, &num);

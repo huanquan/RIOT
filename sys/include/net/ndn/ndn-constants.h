@@ -48,6 +48,7 @@ enum {
 
     /* Signature-related TLVs */
     NDN_TLV_SIGNATURE_TYPE   = 27,
+    NDN_TLV_KEY_LOCATOR      = 28,
 };
 
 

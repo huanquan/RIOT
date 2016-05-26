@@ -302,3 +302,5 @@ void ndn_l2_init(void)
 {
     _l2_frag_list = NULL;
 }
+
+/** @} */

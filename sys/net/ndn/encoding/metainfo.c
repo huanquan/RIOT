@@ -126,12 +126,10 @@ int ndn_metainfo_from_block(const uint8_t* buf, int len, ndn_metainfo_t* meta)
     int l, tl;
 
     // check metainfo type
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_METAINFO) return -1;
-    tl = l;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_METAINFO) return -1;
+    tl = 1;
+    buf += 1;
+    len -= 1;
 
     // check metainfo length
     l = ndn_block_get_var_number(buf, len, &num);
@@ -195,3 +193,5 @@ int ndn_metainfo_from_block(const uint8_t* buf, int len, ndn_metainfo_t* meta)
     if (len != 0) return -1;  // TLV block is invalid
     else return tl;
 }
+
+/** @} */

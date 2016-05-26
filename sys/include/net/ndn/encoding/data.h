@@ -41,6 +41,7 @@ extern "C" {
  * @param[in]  metainfo      Metainfo of the data.
  * @param[in]  content       Content of the data.
  * @param[in]  sig_type      Signature type.
+ * @param[in]  key_name      Name of the key to be encoded in KeyLocator.
  * @param[in]  key           Pointer to the HMAC key. If NULL, the data packet
  *                           will be signed with DIGEST_SHA256 signature.
  * @param[in]  key_len       Length of the HMAC key. Ignored if @p key is NULL.
@@ -54,6 +55,7 @@ ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
 				    ndn_metainfo_t* metainfo,
 				    ndn_block_t* content,
 				    uint8_t sig_type,
+				    ndn_block_t* key_name,
 				    const unsigned char* key,
 				    size_t key_len);
 
@@ -64,6 +66,7 @@ ndn_shared_block_t* ndn_data_create(ndn_block_t* name,
  * @param[in]  metainfo      Metainfo of the data.
  * @param[in]  content       Content of the data.
  * @param[in]  sig_type      Signature type.
+ * @param[in]  key_name      Name of the key to be encoded in KeyLocator.
  * @param[in]  key           Pointer to the HMAC key. If NULL, the data packet
  *                           will be signed with DIGEST_SHA256 signature.
  * @param[in]  key_len       Length of the HMAC key. Ignored if @p key is NULL.
@@ -77,6 +80,7 @@ ndn_shared_block_t* ndn_data_create2(ndn_name_t* name,
 				     ndn_metainfo_t* metainfo,
 				     ndn_block_t* content,
 				     uint8_t sig_type,
+				     ndn_name_t* key_name,
 				     const unsigned char* key,
 				     size_t key_len);
 
@@ -115,6 +119,20 @@ int ndn_data_get_metainfo(ndn_block_t* block, ndn_metainfo_t* meta);
  * @return  -1, if @p block is invalid or incomplete.
  */
 int ndn_data_get_content(ndn_block_t* block, ndn_block_t* content);
+
+/**
+ * @brief  Retrieves the TLV-encoded key locator name from a Data TLV block.
+ *
+ * @param[in]  block      TLV block containing the Data packet.
+ * @param[out] key_name   Place to store the TLV block of the key name.
+ *
+ * @return  0, if success.
+ * @return  -1, if @p block or @p content is NULL.
+ * @return  -1, if @p block is invalid or incomplete.
+ * @return  -2, if key locator is not present in the packet.
+ * @return  -3, if key locator does not contain a key name.
+ */
+int ndn_data_get_key_locator(ndn_block_t* block, ndn_block_t* key_name);
 
 /**
  * @brief    Verifies the signature of the data packet with caller-supplied

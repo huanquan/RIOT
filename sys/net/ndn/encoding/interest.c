@@ -144,11 +144,9 @@ int ndn_interest_get_name(ndn_block_t* block, ndn_block_t* name)
     int l;
 
     /* read interest type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_INTEREST) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_INTEREST) return -1;
+    buf += 1;
+    len -= 1;
 
     /* read interest length and ignore the value */
     l = ndn_block_get_var_number(buf, len, &num);
@@ -157,11 +155,9 @@ int ndn_interest_get_name(ndn_block_t* block, ndn_block_t* name)
     len -= l;
 
     /* read name type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_NAME) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_NAME) return -1;
+    buf += 1;
+    len -= 1;
 
     /* read name length */
     l = ndn_block_get_var_number(buf, len, &num);
@@ -185,11 +181,9 @@ int ndn_interest_get_nonce(ndn_block_t* block, uint32_t* nonce)
     int l;
 
     /* read interest type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_INTEREST) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_INTEREST) return -1;
+    buf += 1;
+    len -= 1;
 
     /* read interest length and ignore the value */
     l = ndn_block_get_var_number(buf, len, &num);
@@ -198,41 +192,33 @@ int ndn_interest_get_nonce(ndn_block_t* block, uint32_t* nonce)
     len -= l;
 
     /* read name type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_NAME) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_NAME) return -1;
+    buf += 1;
+    len -= 1;
 
     /* read name length and skip the components */
     l = ndn_block_get_var_number(buf, len, &num);
     if (l < 0) return -1;
-    buf += (l + num);
-    len -= (l + num);
+    buf += l + (int)num;
+    len -= l + (int)num;
 
     /* read and skip selectors */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num == NDN_TLV_SELECTORS) {
+    if (*buf == NDN_TLV_SELECTORS) {
 	/* skip type */
-	buf += l;
-	len -= l;
+	buf += 1;
+	len -= 1;
 
 	/* read length and skip length and value */
 	l = ndn_block_get_var_number(buf, len, &num);
 	if (l < 0) return -1;
-	buf += (l + num);
-	len -= (l + num);
-
-	/* read nonce type */
-	l = ndn_block_get_var_number(buf, len, &num);
-	if (l < 0) return -1;
+	buf += l + (int)num;
+	len -= l + (int)num;
     }
 
     /* check for nonce type */
-    if (num != NDN_TLV_NONCE) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_NONCE) return -1;
+    buf += 1;
+    len -= 1;
 
     /* check nonce length */
     l = ndn_block_get_var_number(buf, len, &num);
@@ -257,11 +243,9 @@ int ndn_interest_get_lifetime(ndn_block_t* block, uint32_t* life)
     int l;
 
     /* read interest type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_INTEREST) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_INTEREST) return -1;
+    buf += 1;
+    len -= 1;
 
     /* read interest length and ignore the value */
     l = ndn_block_get_var_number(buf, len, &num);
@@ -270,55 +254,45 @@ int ndn_interest_get_lifetime(ndn_block_t* block, uint32_t* life)
     len -= l;
 
     /* read name type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_NAME) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_NAME) return -1;
+    buf += 1;
+    len -= 1;
 
     /* read name length and skip the components */
     l = ndn_block_get_var_number(buf, len, &num);
     if (l < 0) return -1;
-    buf += (l + num);
-    len -= (l + num);
+    buf += l + (int)num;
+    len -= l + (int)num;
 
     /* read and skip selectors */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num == NDN_TLV_SELECTORS) {
+    if (*buf == NDN_TLV_SELECTORS) {
 	/* skip type */
-	buf += l;
-	len -= l;
+	buf += 1;
+	len -= 1;
 
 	/* read length and skip length and value */
 	l = ndn_block_get_var_number(buf, len, &num);
 	if (l < 0) return -1;
-	buf += (l + num);
-	len -= (l + num);
-
-	/* read nonce type */
-	l = ndn_block_get_var_number(buf, len, &num);
-	if (l < 0) return -1;
+	buf += l + (int)num;
+	len -= l + (int)num;
     }
 
     /* check for nonce type */
-    if (num != NDN_TLV_NONCE) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_NONCE) return -1;
+    buf += 1;
+    len -= 1;
 
     /* check nonce length and skip the value */
     l = ndn_block_get_var_number(buf, len, &num);
     if (l < 0) return -1;
     if (num != 4) return -1;
-    buf += (l + num);
-    len -= (l + num);
+    buf += l + (int)num;
+    len -= l + (int)num;
 
     /* read lifetime type */
-    l = ndn_block_get_var_number(buf, len, &num);
-    if (l < 0) return -1;
-    if (num != NDN_TLV_INTERESTLIFETIME) return -1;
-    buf += l;
-    len -= l;
+    if (*buf != NDN_TLV_INTERESTLIFETIME) return -1;
+    buf += 1;
+    len -= 1;
 
     /* read lifetime length */
     l = ndn_block_get_var_number(buf, len, &num);
