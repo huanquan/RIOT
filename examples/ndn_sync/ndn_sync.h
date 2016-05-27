@@ -24,6 +24,7 @@ typedef struct {
 } vn_t;
 
 typedef struct {
+    ndn_shared_block_t* sync_pfx;
     uint8_t idx;    // index of the node
     uint32_t rn;    // round number
     size_t num_node;    // number of nodes in the group
@@ -31,8 +32,6 @@ typedef struct {
     ndn_name_component_t pfx[MAX_NODE_NUM]; // list of data prefixes
     vn_t ldi[MAX_NODE_NUM]; // last received data
 } ndn_sync_t;
-
-ndn_name_component_t sync_pfx = { (uint8_t*)"vsync", 5 };
 
 
 /**
@@ -48,6 +47,11 @@ ndn_name_component_t sync_pfx = { (uint8_t*)"vsync", 5 };
  */
 int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node);
 
+
+ndn_shared_block_t* ndn_sync_get_sync_prefix();
+
+
+ndn_shared_block_t* ndn_sync_get_data_prefix(ndn_sync_t* node, uint8_t idx);
 
 /**
  * @brief   construct data packet for publishing and broadcast sync interests

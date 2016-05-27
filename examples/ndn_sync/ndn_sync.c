@@ -10,11 +10,10 @@ extern "C" {
 #include "random.h"
 #include "ndn_sync.h"
 
-extern ndn_name_component_t sync_pfx;
-
 
 int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node)
 {
+    node->sync_pfx = ndn_sync_get_sync_prefix();
     node->idx = idx;
     node->num_node = num_node;
     node->rn = 0;
@@ -26,7 +25,7 @@ int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node)
 
 /***********************************************************************************/
 
-static int _send_interest(ndn_app_t* handler, ndn_name_component_t* pfx,
+static int _send_interest(ndn_app_t* handler, ndn_block_t* pfx,
                           uint32_t rn, uint8_t* vv, size_t num_node)
 {
     ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(pfx, rn);
@@ -36,8 +35,11 @@ static int _send_interest(ndn_app_t* handler, ndn_name_component_t* pfx,
     if (name == NULL) return EXIT_BADFMT;
     
     // Ack is ignored
-    if (ndn_app_express_interest(handler, &(name->block), NULL, TIME_SEC, NULL, NULL) < 0)
+    if (ndn_app_express_interest(handler, &(name->block), NULL, TIME_SEC, NULL, NULL) < 0) {
+        ndn_shared_block_release(name);
         return EXIT_NOSPACE;
+    }
+    ndn_shared_block_release(name);
     return EXIT_SUCCESS;
 }
 
@@ -70,6 +72,34 @@ static int _add_piggyback(const vn_t* last_vn, ndn_block_t* content)
 }
 
 
+ndn_shared_block_t* _name_from_component(const ndn_name_component_t* pfx)
+{
+    char* buf = (char*) malloc(pfx.len + 2);
+    if (buf == NULL) {
+        return NULL;
+    }
+    buf[0] = '/';
+    memcpy(buf + 1, pfx.buf, pfx.len);
+    buf[pfx.len + 1] = '\0';
+    ndn_shared_block_t* dp = ndn_name_from_uri(buf, strlen(buf));
+    free(buf);
+    return dp;
+}
+
+
+ndn_shared_block_t* ndn_sync_get_sync_prefix()
+{
+    return ndn_name_from_uri("/vsync", 6);
+}
+
+
+ndn_shared_block_t* ndn_sync_get_data_prefix(ndn_sync_t* node, uint8_t idx)
+{
+    assert(0 <= idx && idx < node->num_node);
+    return _name_from_component(&(node->pfx[idx]));
+}
+
+
 ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
                                            ndn_metainfo_t* metainfo,
                                            ndn_block_t* content)
@@ -86,7 +116,10 @@ ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
     // publish data
     node->vv[node->idx] += 1;
     
-    ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(&(node->pfx[node->idx]), node->rn);
+    ndn_shared_block_t* pfx = _name_from_component(&(node->pfx[node->idx]));
+    if (pfx == NULL) return NULL;
+    ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(pfx, node->rn);
+    ndn_shared_block_release(pfx);
     if (pfx_rn == NULL) return NULL;
     ndn_shared_block_t* name = ndn_name_append_uint8(&(pfx_rn->block), node->vv[node->idx]);
     ndn_shared_block_release(pfx_rn);
@@ -100,7 +133,7 @@ ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
         }
     }
     
-    _send_interest(handler, &(sync_pfx), node->rn, node->vv, node->num_node);
+    _send_interest(handler, &(node->sync_pfx.block), node->rn, node->vv, node->num_node);
     
     // update last packet
     node->ldi[node->idx].rn = node->rn;
@@ -158,12 +191,20 @@ static int _extract_fields(ndn_block_t* name, ndn_name_component_t* pfx,
 static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
                                uint32_t rn, uint8_t old_sn, uint8_t sn)
 {
+    // encode data prefix
+    ndn_shared_block_t* dp = _name_from_component(pfx);
+    // TODO: error handling
+    assert(dp != NULL);
+
     if (old_sn == MAX_SEQ_NUM) return EXIT_SUCCESS; // avoid math overflow
     // retrieve data in (old_sn, sn]
     for (old_sn++; old_sn <= sn; old_sn++) {
-        if (_send_interest(handler, pfx, rn, &old_sn, 1) != EXIT_SUCCESS)
+        if (_send_interest(handler, dp->block, rn, &old_sn, 1) != EXIT_SUCCESS) {
+            ndn_shared_block_release(dp);
             return EXIT_NOSPACE;
+        }
     }
+    ndn_shared_block_release(dp);
     
     return EXIT_SUCCESS;
 }
