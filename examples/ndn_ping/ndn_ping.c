@@ -79,15 +79,18 @@ static int on_timeout(ndn_block_t* interest)
 }
 
 static uint16_t count = 0;
+static uint16_t max_count;
 
 static int send_interest(void* context)
 {
     const char* uri = (const char*)context;
 
-    // stop the app after sending 10 interests
     printf("client (pid=%" PRIkernel_pid "): in sched callback, count=%d\n",
 	   handle->id, ++count);
-    if (count == 1000) {
+    if (count > max_count) {
+	// This is pure hack: ideally should wait for all pending I/O requests
+	// to finish before stopping the app.  However, this may cause the app
+	// to block forever if not implemented very carefully.
 	printf("client (pid=%" PRIkernel_pid "): stop the app\n", handle->id);
 	return NDN_APP_STOP;
     }
@@ -123,7 +126,7 @@ static int send_interest(void* context)
 	return NDN_APP_ERROR;
     }
     ndn_shared_block_release(sin);
-
+    
     if (ndn_app_schedule(handle, send_interest, context, 2000000) != 0) {
 	printf("client (pid=%" PRIkernel_pid "): cannot schedule next interest"
 	       "\n", handle->id);
@@ -135,7 +138,7 @@ static int send_interest(void* context)
     return NDN_APP_CONTINUE;
 }
 
-static void run_client(const char* uri)
+static void run_client(const char* uri, int max_cnt)
 {
     printf("client (pid=%" PRIkernel_pid "): start\n", thread_getpid());
 
@@ -146,6 +149,7 @@ static void run_client(const char* uri)
 	return;
     }
 
+    max_count = max_cnt;
     count = 0;
 
     if (ndn_app_schedule(handle, send_interest, (void*)uri, 1000000) != 0) {
@@ -271,12 +275,18 @@ int ndn_ping(int argc, char **argv)
     }
 
     if (strcmp(argv[1], "client") == 0) {
-	if (argc < 3) {
-            printf("usage: %s client _name_uri_\n", argv[0]);
+	if (argc < 4) {
+            printf("usage: %s client _name_uri_ _max_count_\n", argv[0]);
             return 1;
         }
 
-	run_client(argv[2]);
+	int max_cnt = atoi(argv[3]);
+	if (max_cnt == 0) {
+	    printf("invalid max count number: %s\n", argv[3]);
+	    return 1;
+	}
+
+	run_client(argv[2], max_cnt);
     }
     else if (strcmp(argv[1], "server") == 0) {
         if (argc < 3) {
