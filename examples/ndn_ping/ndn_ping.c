@@ -172,7 +172,7 @@ static void run_client(const char* uri, int max_cnt)
     ndn_app_destroy(handle);
 }
 
-
+static uint8_t sid = 0;
 
 static int on_interest(ndn_block_t* interest)
 {
@@ -188,7 +188,7 @@ static int on_interest(ndn_block_t* interest)
     ndn_name_print(&in);
     putchar('\n');
 
-    ndn_shared_block_t* sdn = ndn_name_append_uint8(&in, 0);
+    ndn_shared_block_t* sdn = ndn_name_append_uint8(&in, sid);
     if (sdn == NULL) {
 	printf("server (pid=%" PRIkernel_pid "): cannot append component to "
 	       "name\n", handle->id);
@@ -228,7 +228,7 @@ static int on_interest(ndn_block_t* interest)
     return NDN_APP_CONTINUE;
 }
 
-static void run_server(const char* prefix)
+static void run_server(const char* prefix, int id)
 {
     printf("server (pid=%" PRIkernel_pid "): start\n", thread_getpid());
 
@@ -238,6 +238,7 @@ static void run_server(const char* prefix)
 	       thread_getpid());
 	return;
     }
+    sid = (uint8_t)id;
 
     ndn_shared_block_t* sp = ndn_name_from_uri(prefix, strlen(prefix));
     if (sp == NULL) {
@@ -289,12 +290,12 @@ int ndn_ping(int argc, char **argv)
 	run_client(argv[2], max_cnt);
     }
     else if (strcmp(argv[1], "server") == 0) {
-        if (argc < 3) {
-            printf("usage: %s server _prefix_\n", argv[0]);
+        if (argc < 4) {
+            printf("usage: %s server _prefix_ _server_id_\n", argv[0]);
             return 1;
         }
 
-	run_server(argv[2]);
+	run_server(argv[2], atoi(argv[3]));
     }
     else {
         puts("error: invalid command");

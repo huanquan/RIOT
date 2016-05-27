@@ -216,8 +216,10 @@ static void _send_data_to_app(kernel_pid_t id, ndn_shared_block_t* data)
 
 int ndn_pit_match_data(ndn_shared_block_t* sd, kernel_pid_t iface)
 {
-    assert(_pit != NULL);
     assert(sd != NULL);
+
+    if (_pit == NULL)  // no PIT entry exists
+	return -1;
 
     ndn_block_t name;
     if (0 != ndn_data_get_name(&sd->block, &name)) {
