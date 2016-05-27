@@ -214,7 +214,7 @@ static void _send_data_to_app(kernel_pid_t id, ndn_shared_block_t* data)
     DEBUG("ndn: data sent to pid %" PRIkernel_pid "\n", id);
 }
 
-int ndn_pit_match_data(ndn_shared_block_t* sd)
+int ndn_pit_match_data(ndn_shared_block_t* sd, kernel_pid_t iface)
 {
     assert(_pit != NULL);
     assert(sd != NULL);
@@ -241,19 +241,22 @@ int ndn_pit_match_data(ndn_shared_block_t* sd)
 	    xtimer_remove(&entry->timer);
 
 	    for (int i = 0; i < entry->face_list_size; ++i) {
-		kernel_pid_t iface = entry->face_list[i].id;
+		kernel_pid_t id = entry->face_list[i].id;
+		if (id == iface)
+		    continue;  // do not send back to incoming face
+
 		switch (entry->face_list[i].type) {
 		    case NDN_FACE_NETDEV:
 			DEBUG("ndn: send data to netdev face %"
-			      PRIkernel_pid "\n", iface);
-			ndn_netif_send(iface, &sd->block);
+			      PRIkernel_pid "\n", id);
+			ndn_netif_send(id, &sd->block);
 			break;
 
 		    case NDN_FACE_APP:
 			DEBUG("ndn: send data to app face %"
-			      PRIkernel_pid "\n", iface);
+			      PRIkernel_pid "\n", id);
 			ndn_shared_block_t* ssd = ndn_shared_block_copy(sd);
-			_send_data_to_app(iface, ssd);
+			_send_data_to_app(id, ssd);
 			break;
 
 		    default:

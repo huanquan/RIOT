@@ -160,11 +160,10 @@ static void _process_data(kernel_pid_t face_id, int face_type,
 {
     assert(sd != NULL);
 
-    (void)face_id;
     (void)face_type;
 
     // match data against pit
-    if (ndn_pit_match_data(sd) == 0) {
+    if (ndn_pit_match_data(sd, face_id) == 0) {
 	// found match in pit
 	// try to add data to CS
 	ndn_cs_add(sd);

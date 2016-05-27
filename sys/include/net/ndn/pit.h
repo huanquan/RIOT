@@ -67,17 +67,18 @@ int ndn_pit_add(kernel_pid_t face_id, int face_type, ndn_shared_block_t* si);
 void ndn_pit_timeout(msg_t *msg);
 
 /**
- * @brief   Matches data against PIT and forwards the data to all incoming
- *          faces.
+ * @brief   Matches data against PIT and forwards the data to all faces where
+ *          the Interest is received (except @p iface).
  * @details This function will not take ownership of @p sd.
  *
  * @param[in]  sd    Shared block pointer of the data packet.
+ * @param[in]  iface Incoming face of the data packet.
  *
  * @return  0, if a match is found.
  * @return  -1, if no matching PIT entry is found.
  * @return  -1, if @p sd is invalid.
  */
-int ndn_pit_match_data(ndn_shared_block_t* sd);
+int ndn_pit_match_data(ndn_shared_block_t* sd, kernel_pid_t iface);
 
 /**
  * @brief    Initializes the pending interest table.
