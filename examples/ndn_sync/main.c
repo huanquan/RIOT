@@ -25,10 +25,10 @@
 #include "msg.h"
 #include "config.h"
 
-extern int ndn_ping(int argc, char **argv);
+extern int vsync(int argc, char **argv);
 
 static const shell_command_t shell_commands[] = {
-    { "ndnping", "start ndn-ping client and server", ndn_ping },
+    { "vsync", "VectorSync", vsync },
     { NULL, NULL, NULL }
 };
 

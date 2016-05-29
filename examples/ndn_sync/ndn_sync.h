@@ -8,6 +8,10 @@
 #include "net/ndn/encoding/data.h"
 #include "net/ndn/msg_type.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define MAX_NODE_NUM 16
 #define FIRST_SEQ_NUM 1
 #define MAX_SEQ_NUM 255
@@ -48,7 +52,7 @@ typedef struct {
 int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node);
 
 
-ndn_shared_block_t* ndn_sync_get_sync_prefix();
+ndn_shared_block_t* ndn_sync_get_sync_prefix(void);
 
 
 ndn_shared_block_t* ndn_sync_get_data_prefix(ndn_sync_t* node, uint8_t idx);
@@ -104,4 +108,8 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node,
 int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node,
                           ndn_block_t* data);
 
-#endif  // _NDN_SYNC_H_
+#ifdef __cplusplus
+}
+#endif
+
+#endif  /* _NDN_SYNC_H_ */

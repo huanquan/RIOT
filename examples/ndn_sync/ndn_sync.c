@@ -1,7 +1,3 @@
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
@@ -35,6 +31,7 @@ static int _send_interest(ndn_app_t* handler, ndn_block_t* pfx,
     if (name == NULL) return EXIT_BADFMT;
     
     // Ack is ignored
+    // Timeout is ignored
     if (ndn_app_express_interest(handler, &(name->block), NULL, TIME_SEC, NULL, NULL) < 0) {
         ndn_shared_block_release(name);
         return EXIT_NOSPACE;
@@ -48,6 +45,9 @@ static int _add_piggyback(const vn_t* last_vn, ndn_block_t* content)
 {
     size_t pl = content->len + 10;  // 10 = 2 * max_var_number_size
     uint8_t* buf = (uint8_t*) malloc(pl);
+    if (buf == NULL) {
+        return EXIT_NOSPACE;
+    }
     uint8_t* ptr = buf;
     size_t rl = pl;
     int l;
@@ -74,20 +74,20 @@ static int _add_piggyback(const vn_t* last_vn, ndn_block_t* content)
 
 ndn_shared_block_t* _name_from_component(const ndn_name_component_t* pfx)
 {
-    char* buf = (char*) malloc(pfx.len + 2);
+    char* buf = (char*) malloc(pfx->len + 2);
     if (buf == NULL) {
         return NULL;
     }
     buf[0] = '/';
-    memcpy(buf + 1, pfx.buf, pfx.len);
-    buf[pfx.len + 1] = '\0';
+    memcpy(buf + 1, pfx->buf, pfx->len);
+    buf[pfx->len + 1] = '\0';
     ndn_shared_block_t* dp = ndn_name_from_uri(buf, strlen(buf));
     free(buf);
     return dp;
 }
 
 
-ndn_shared_block_t* ndn_sync_get_sync_prefix()
+ndn_shared_block_t* ndn_sync_get_sync_prefix(void)
 {
     return ndn_name_from_uri("/vsync", 6);
 }
@@ -95,7 +95,7 @@ ndn_shared_block_t* ndn_sync_get_sync_prefix()
 
 ndn_shared_block_t* ndn_sync_get_data_prefix(ndn_sync_t* node, uint8_t idx)
 {
-    assert(0 <= idx && idx < node->num_node);
+    assert(idx < node->num_node);
     return _name_from_component(&(node->pfx[idx]));
 }
 
@@ -112,34 +112,37 @@ ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
         node->rn += 1;
         memset(node->vv, 0, node->num_node);
     }
-    
-    // publish data
     node->vv[node->idx] += 1;
     
+    // publish data
     ndn_shared_block_t* pfx = _name_from_component(&(node->pfx[node->idx]));
     if (pfx == NULL) return NULL;
-    ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(pfx, node->rn);
+    ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(&(pfx->block), node->rn);
     ndn_shared_block_release(pfx);
     if (pfx_rn == NULL) return NULL;
     ndn_shared_block_t* name = ndn_name_append_uint8(&(pfx_rn->block), node->vv[node->idx]);
     ndn_shared_block_release(pfx_rn);
     if (name == NULL) return NULL;
     
-    
-    if (node->vv[node->idx] == FIRST_SEQ_NUM)  {
-        if (_add_piggyback(&(node->ldi[node->idx]), content) != EXIT_SUCCESS) {
+    ndn_block_t copy_content;
+    uint8_t* tmp = malloc(content->len);
+    memcpy(tmp, content->buf, content->len);
+    copy_content.buf = (const uint8_t*) tmp;
+    copy_content.len = content->len;
+    if (node->vv[node->idx] == FIRST_SEQ_NUM) {
+        if (_add_piggyback(&(node->ldi[node->idx]), &copy_content) != EXIT_SUCCESS) {
             ndn_shared_block_release(name);
             return NULL;
         }
     }
     
-    _send_interest(handler, &(node->sync_pfx.block), node->rn, node->vv, node->num_node);
+    _send_interest(handler, &(node->sync_pfx->block), node->rn, node->vv, node->num_node);
     
     // update last packet
     node->ldi[node->idx].rn = node->rn;
     node->ldi[node->idx].sn = node->vv[node->idx];
     
-    ndn_shared_block_t* d = ndn_data_create(&(name->block), metainfo, content,
+    ndn_shared_block_t* d = ndn_data_create(&(name->block), metainfo, &copy_content,
                                             NDN_SIG_TYPE_DIGEST_SHA256,NULL,0);
     ndn_shared_block_release(name);
     
@@ -173,8 +176,6 @@ static int _extract_fields(ndn_block_t* name, ndn_name_component_t* pfx,
         if (tmp.len != sizeof(uint32_t)) return EXIT_BADFMT;
         memcpy(rn, tmp.buf, tmp.len);
     }
-    
-    free((uint8_t*) tmp.buf);
     tmp.buf = NULL;
     
     if (vv != NULL) {
@@ -199,7 +200,7 @@ static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
     if (old_sn == MAX_SEQ_NUM) return EXIT_SUCCESS; // avoid math overflow
     // retrieve data in (old_sn, sn]
     for (old_sn++; old_sn <= sn; old_sn++) {
-        if (_send_interest(handler, dp->block, rn, &old_sn, 1) != EXIT_SUCCESS) {
+        if (_send_interest(handler, &(dp->block), rn, &old_sn, 1) != EXIT_SUCCESS) {
             ndn_shared_block_release(dp);
             return EXIT_NOSPACE;
         }
@@ -311,8 +312,3 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     
     return EXIT_SUCCESS;
 }
-
-#ifdef __cplusplus
-}
-#endif
-
