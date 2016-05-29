@@ -101,13 +101,14 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node,
  * @param[in]  handler    Handler of the app that calls this function.
  * @param[in]  node       State machine of sync protocol.
  * @param[in]  data       Received data.
+ * @param[out] content    Content of received data. Does not copy data.
  *
  * @return  0, if success.
  * @return  1, if the data is in a bad format.
  * @return  2, if fail to fetch missing data.
  */
 int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node,
-                          ndn_block_t* data);
+                          ndn_block_t* data, ndn_block_t* content);
 
 #ifdef __cplusplus
 }

@@ -252,16 +252,17 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
 static int _get_piggyback(ndn_block_t* content, vn_t* vn)
 {
     uint32_t num;
-    int l;
+    int l, pg_len = 0;
     l = ndn_block_get_var_number(content->buf, content->len, &(vn->rn));
-    if (l < 0) return EXIT_BADFMT;
+    if (l < 0) return -1;
+    pg_len += l;
     
     l = ndn_block_get_var_number(content->buf + l, content->len - l, &num);
-    if (l < 0) return EXIT_BADFMT;
-    if (num > 255) return EXIT_BADFMT;
+    if (l < 0) return -1;
+    if (num > 255) return -1;
     vn->sn = (uint8_t) num;
     
-    return EXIT_SUCCESS;
+    return pg_len + l;
 }
 
 static int _get_node_index_by_pfx(ndn_sync_t* node, ndn_name_component_t* pfx)
@@ -274,7 +275,7 @@ static int _get_node_index_by_pfx(ndn_sync_t* node, ndn_name_component_t* pfx)
 }
 
 
-int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* data)
+int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* data, ndn_block_t* content)
 {
     if (handler == NULL || node == NULL || data == NULL || data->buf == NULL) return EXIT_BADFMT;
     
@@ -283,7 +284,7 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     uint8_t sn;
     uint32_t rn;
     vn_t pg_vn;
-    int i;
+    int i, l = 0;
     
     if (ndn_data_get_name(data, &d_name) < 0)
         return EXIT_BADFMT;
@@ -297,7 +298,7 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     if (ndn_data_get_content(data, &d_content) < 0) return EXIT_BADFMT;
     
     if (sn == FIRST_SEQ_NUM) {
-        if (_get_piggyback(&d_content, &pg_vn) != EXIT_SUCCESS)
+        if ((l = _get_piggyback(&d_content, &pg_vn)) < 0)
             return EXIT_BADFMT;
             
         if (node->ldi[i].rn != pg_vn.rn)    // either out-of-date data (>) or missing too much data (<)
@@ -311,6 +312,10 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
         node->ldi[i].rn = rn;
         node->ldi[i].sn = sn;
     }
+    
+    content->buf = d_content.buf + l;
+    content->len = d_content.len - l;
+    
     
     return EXIT_SUCCESS;
 }
