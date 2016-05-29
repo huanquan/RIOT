@@ -22,7 +22,7 @@
 
 #include "net/ndn/fib.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG (1)
 #include "debug.h"
 
 static ndn_fib_entry_t *_fib;
@@ -73,7 +73,9 @@ int ndn_fib_add(ndn_shared_block_t* prefix, kernel_pid_t face_id,
 {
     assert(prefix != NULL);
 
-    ndn_fib_entry_t *entry;
+    int max_plen = -1;
+    ndn_fib_entry_t *entry, *max = NULL;
+    bool match_found = false;
     DL_FOREACH(_fib, entry) {
 	int r =
 	    ndn_name_compare_block(&prefix->block, &entry->prefix->block);
@@ -87,8 +89,7 @@ int ndn_fib_add(ndn_shared_block_t* prefix, kernel_pid_t face_id,
 		      face_id, face_type);
 		return -1;
 	    }
-	    // we're done
-	    return 0;
+	    match_found = true;
 	} else if (r == -2) {
 	    // the prefix to add is a shorter prefix of an existing prefix
 	    // the destination face should be added to the existing entry
@@ -100,7 +101,19 @@ int ndn_fib_add(ndn_shared_block_t* prefix, kernel_pid_t face_id,
 		return -1;
 	    }
 	    // continue to check other entries
+	} else if (r == 2) {
+	    // the existing prefix is a shorter prefix of the prefix to add
+	    // track the longest one of such prefixes
+	    if (entry->plen > max_plen) {
+		max_plen = entry->plen;
+		max = entry;
+	    }
 	}
+    }
+
+    if (match_found) {
+	// no need to create new entry
+	return 0;
     }
 
     // allocate new entry
@@ -118,12 +131,27 @@ int ndn_fib_add(ndn_shared_block_t* prefix, kernel_pid_t face_id,
 
     if (NULL == _fib_entry_add_face(entry, face_id, face_type)) {
 	ndn_shared_block_release(entry->prefix);
+	free(entry->face_list);
 	free(entry);
 	return -1;
     }
 
+    // inherit faces from the immediate parent (i.e., longest matching prefix)
+    if (max != NULL) {
+	for (int i = 0; i < max->face_list_size; ++i) {
+	    if (NULL == _fib_entry_add_face(entry, max->face_list[i].id,
+					    max->face_list[i].type)) {
+		ndn_shared_block_release(entry->prefix);
+		free(entry->face_list);
+		free(entry);
+		return -1;
+	    }
+	}
+    }
+
     DL_PREPEND(_fib, entry);
-    DEBUG("ndn: add new fib entry (face=%" PRIkernel_pid ")\n", face_id);
+    DEBUG("ndn: add new fib entry (face=%" PRIkernel_pid ","
+	  " face_list_size=%d)\n", face_id, entry->face_list_size);
     return 0;
 }
 
