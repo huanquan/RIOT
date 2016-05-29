@@ -83,13 +83,14 @@ ndn_shared_block_t* ndn_sync_publish_data(ndn_app_t* handler, ndn_sync_t* node,
  * @param[in]  handler    Handler of the app that calls this function.
  * @param[in]  node       State machine of sync protocol.
  * @param[in]  interest   Received interest.
+ * @oaram[in]  on_data    Callback executed when data of missing data's interests are received. Can be NULL.
  *
  * @return  0, if success.
  * @return  1, if the interest is in a bad format.
  * @return  2, if fail to fetch missing data.
  */
 int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node,
-                                   ndn_block_t* si);
+                                   ndn_block_t* interest, ndn_app_data_cb_t on_data);
 
 /**
  * @brief   process received data, update states and fetch missing data storing

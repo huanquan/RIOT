@@ -22,7 +22,8 @@ int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node)
 /***********************************************************************************/
 
 static int _send_interest(ndn_app_t* handler, ndn_block_t* pfx,
-                          uint32_t rn, uint8_t* vv, size_t num_node)
+                          uint32_t rn, uint8_t* vv, size_t num_node,
+                          ndn_app_data_cb_t on_data)
 {
     ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(pfx, rn);
     if (pfx_rn == NULL) return EXIT_BADFMT;
@@ -32,7 +33,7 @@ static int _send_interest(ndn_app_t* handler, ndn_block_t* pfx,
     
     // Ack is ignored
     // Timeout is ignored
-    if (ndn_app_express_interest(handler, &(name->block), NULL, TIME_SEC, NULL, NULL) < 0) {
+    if (ndn_app_express_interest(handler, &(name->block), NULL, TIME_SEC, on_data, NULL) < 0) {
         ndn_shared_block_release(name);
         return EXIT_NOSPACE;
     }
@@ -136,7 +137,7 @@ ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
         }
     }
     
-    _send_interest(handler, &(node->sync_pfx->block), node->rn, node->vv, node->num_node);
+    _send_interest(handler, &(node->sync_pfx->block), node->rn, node->vv, node->num_node, NULL);
     
     // update last packet
     node->ldi[node->idx].rn = node->rn;
@@ -190,7 +191,8 @@ static int _extract_fields(ndn_block_t* name, ndn_name_component_t* pfx,
 
 
 static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
-                               uint32_t rn, uint8_t old_sn, uint8_t sn)
+                               uint32_t rn, uint8_t old_sn, uint8_t sn,
+                               ndn_app_data_cb_t on_data)
 {
     // encode data prefix
     ndn_shared_block_t* dp = _name_from_component(pfx);
@@ -200,7 +202,7 @@ static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
     if (old_sn == MAX_SEQ_NUM) return EXIT_SUCCESS; // avoid math overflow
     // retrieve data in (old_sn, sn]
     for (old_sn++; old_sn <= sn; old_sn++) {
-        if (_send_interest(handler, &(dp->block), rn, &old_sn, 1) != EXIT_SUCCESS) {
+        if (_send_interest(handler, &(dp->block), rn, &old_sn, 1, on_data) != EXIT_SUCCESS) {
             ndn_shared_block_release(dp);
             return EXIT_NOSPACE;
         }
@@ -211,7 +213,7 @@ static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
 }
 
 
-int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* interest)
+int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* interest, ndn_app_data_cb_t on_data)
 {
     if (handler == NULL || node == NULL || interest == NULL) return EXIT_BADFMT;
     
@@ -236,7 +238,7 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
     _merge(node->vv, vv, node->vv, node->num_node);
     
     for (i = 0; i < node->num_node; i++) {
-        if(_check_missing_data(handler, &(node->pfx[i]), rn, old_vv[i], vv[i]) != EXIT_SUCCESS)
+        if(_check_missing_data(handler, &(node->pfx[i]), rn, old_vv[i], vv[i], on_data) != EXIT_SUCCESS)
             return EXIT_NOSPACE;
     }
     
@@ -301,7 +303,7 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
         if (node->ldi[i].rn != pg_vn.rn)    // either out-of-date data (>) or missing too much data (<)
             return EXIT_NOSPACE;
             
-        if (_check_missing_data(handler, &pfx, pg_vn.rn, node->ldi[i].sn, pg_vn.sn) != EXIT_SUCCESS)
+        if (_check_missing_data(handler, &pfx, pg_vn.rn, node->ldi[i].sn, pg_vn.sn, NULL) != EXIT_SUCCESS)
             return EXIT_NOSPACE;
     }
     
