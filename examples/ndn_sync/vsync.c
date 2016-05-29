@@ -195,33 +195,13 @@ static void run_vsync(void* publish_context)
     ndn_name_print(&(dp->block));
     printf("\"\n");
     // pass ownership of "dp" to the API
-    if (ndn_app_register_prefix(handle, dp, _on_sync_interest) != 0) {
+    if (ndn_app_register_prefix(handle, dp, _on_wtf_interest) != 0) {
         printf("vsync (pid=%" PRIkernel_pid "): failed to register prefix\n",
                handle->id);
         ndn_app_destroy(handle);
         return;
     }
     dp = NULL;
-
-    // 2. Register sync prefix
-    ndn_shared_block_t* sp = ndn_sync_get_sync_prefix();
-    if (sp == NULL) {
-        printf("vsync (pid=%" PRIkernel_pid "): cannot get sync prefix\n",
-               handle->id);
-        return;
-    }
-
-    printf("vsync (pid=%" PRIkernel_pid "): register prefix \"", handle->id);
-    ndn_name_print(&(sp->block));
-    printf("\"\n");
-    // pass ownership of "sp" to the API
-    if (ndn_app_register_prefix(handle, sp, _on_wtf_interest) != 0) {
-        printf("vsync (pid=%" PRIkernel_pid "): failed to register prefix\n",
-               handle->id);
-        ndn_app_destroy(handle);
-        return;
-    }
-    sp = NULL;
 
     // 3. Schedule publication of data (only alice has this step)
     if (node.idx == 0) {
@@ -233,6 +213,26 @@ static void run_vsync(void* publish_context)
         }
         printf("vsync (pid=%" PRIkernel_pid "): schedule first interest in 1 sec\n",
                handle->id);
+    } else {
+        // 2. Register sync prefix
+        ndn_shared_block_t* sp = ndn_sync_get_sync_prefix();
+        if (sp == NULL) {
+            printf("vsync (pid=%" PRIkernel_pid "): cannot get sync prefix\n",
+                   handle->id);
+            return;
+        }
+
+        printf("vsync (pid=%" PRIkernel_pid "): register prefix \"", handle->id);
+        ndn_name_print(&(sp->block));
+        printf("\"\n");
+        // pass ownership of "sp" to the API
+        if (ndn_app_register_prefix(handle, sp, _on_sync_interest) != 0) {
+            printf("vsync (pid=%" PRIkernel_pid "): failed to register prefix\n",
+                   handle->id);
+            ndn_app_destroy(handle);
+            return;
+        }
+        sp = NULL;
     }
 
     printf("vsync (pid=%" PRIkernel_pid "): enter app run loop\n",
