@@ -274,6 +274,8 @@ static int _skip_type_len(ndn_block_t* block)
 }
 
 
+
+// Return number of bytes consumed by the piggybacked metadata
 static int _get_piggyback(ndn_block_t* content, vn_t* vn)
 {
     uint32_t num;
