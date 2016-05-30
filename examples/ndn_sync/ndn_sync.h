@@ -14,7 +14,7 @@ extern "C" {
 
 #define MAX_NODE_NUM 16
 #define FIRST_SEQ_NUM 1
-#define MAX_SEQ_NUM 255
+#define MAX_SEQ_NUM 15
 #define MAX_NAME_LEN 255
 #define TIME_SEC 1000
 

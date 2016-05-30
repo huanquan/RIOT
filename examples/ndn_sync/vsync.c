@@ -1,6 +1,7 @@
 #include "config.h"
 #include "ndn_sync.h"
 
+#include "byteorder.h"
 
 #define MIN(a,b) ((a) < (b)? (a): (b))
 #define PUBLICATION_LIST_CAPACITY (20)
@@ -73,7 +74,7 @@ static int _on_data(ndn_block_t* interest, ndn_block_t* data)
     if (retval == 0) {
         ndn_block_t dn;
         ndn_data_get_name(data, &dn);
-        printf("vsync (pid=%" PRIkernel_pid "): data received\n\t(",
+        printf("vsync (pid=%" PRIkernel_pid "): data received (",
                handle->id);
         ndn_name_print(&dn);
         printf(") -> \"%.*s\"\n", (int) content.len, content.buf);
@@ -122,7 +123,9 @@ static int _parse_wtf_interest(ndn_block_t* interest, ndn_block_t* name,
     if (tmp.len != sizeof(uint32_t)) {
         return 3;
     }
-    memcpy(rn, tmp.buf, tmp.len);
+    uint32_t network_rn;
+    memcpy(&network_rn, tmp.buf, tmp.len);
+    *rn = NTOHL(network_rn);
     tmp.buf = NULL; // we dont own it, so it's okay to reset it
     
     // get seq number
@@ -196,13 +199,16 @@ static int _publish_data(void* context)
     _publication_list_insert(node.rn, node.vv[node.idx], d);
     pcontext->current += data_size;
 
-    // Schedule next publish
+    printf("vsync (pid=%" PRIkernel_pid "): publish data (%u, %u)\n",
+           handle->id, node.rn, (uint32_t) node.vv[node.idx]);
+
+    // Schedule next publishing
     if (ndn_app_schedule(handle, _publish_data, context, 2000000) != 0) {
-        printf("vsync (pid=%" PRIkernel_pid "): cannot schedule next interest\n",
+        printf("vsync (pid=%" PRIkernel_pid "): cannot schedule next publishing\n",
                handle->id);
         return NDN_APP_ERROR;
     }
-    printf("vsync (pid=%" PRIkernel_pid "): schedule next interest in 2 sec\n",
+    printf("vsync (pid=%" PRIkernel_pid "): schedule next publishing in 2 sec\n",
            handle->id);
     return NDN_APP_CONTINUE;
 }

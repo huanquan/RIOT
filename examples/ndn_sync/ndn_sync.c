@@ -163,6 +163,8 @@ static void _merge(uint8_t* lhs, uint8_t* rhs1, uint8_t* rhs2, size_t len)
     }
 }
 
+
+// Extract fields from a sync interest
 static int _extract_fields(ndn_block_t* name, ndn_name_component_t* pfx,
                            uint32_t* rn, uint8_t* vv, size_t num_node)
 {
@@ -176,7 +178,9 @@ static int _extract_fields(ndn_block_t* name, ndn_name_component_t* pfx,
         if (ndn_name_get_component_from_block(name, 1, &tmp) < 0) return EXIT_BADFMT;
         
         if (tmp.len != sizeof(uint32_t)) return EXIT_BADFMT;
-        memcpy(rn, tmp.buf, tmp.len);
+        uint32_t network_rn;
+        memcpy(&network_rn, tmp.buf, tmp.len);
+        *rn = NTOHL(network_rn);
     }
     tmp.buf = NULL;
     
