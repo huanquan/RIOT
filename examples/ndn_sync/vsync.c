@@ -65,9 +65,30 @@ static size_t _publication_list_insert(uint32_t rn, uint8_t sn,
 }
 
 
+static int _on_data(ndn_block_t* interest, ndn_block_t* data)
+{
+    assert(interest != NULL);   // just to make compiler happy
+    ndn_block_t content;
+    int retval = ndn_sync_process_data(handle, &node, data, &content);
+    if (retval == 0) {
+        ndn_block_t dn;
+        ndn_data_get_name(data, &dn);
+        printf("vsync (pid=%" PRIkernel_pid "): data received, name=",
+               handle->id);
+        ndn_name_print(&dn);
+        printf("\nContent: \"%.*s\"\n", (int) content.len, content.buf);
+        return NDN_APP_CONTINUE;
+    } else {
+        printf("vsync (pid=%" PRIkernel_pid "): process_data returns %d\n",
+               handle->id, retval);
+        return NDN_APP_ERROR;
+    }
+}
+
+
 static int _on_sync_interest(ndn_block_t* interest)
 {
-    int retval = ndn_sync_process_sync_interest(handle, &node, interest, NULL);
+    int retval = ndn_sync_process_sync_interest(handle, &node, interest, _on_data);
     if (retval == 0) {
         ndn_block_t in;
         ndn_interest_get_name(interest, &in);
