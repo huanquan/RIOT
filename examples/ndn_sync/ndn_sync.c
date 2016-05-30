@@ -253,17 +253,37 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
 static int _get_piggyback(ndn_block_t* content, vn_t* vn)
 {
     uint32_t num;
-    int l, pg_len = 0;
-    l = ndn_block_get_var_number(content->buf, content->len, &(vn->rn));
-    if (l < 0) return -1;
-    pg_len += l;
+    int l, skip_len = 0, len = content->len;
+    const uint8_t* buf = content->buf;
     
-    l = ndn_block_get_var_number(content->buf + l, content->len - l, &num);
+    // read content type and ignore
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    skip_len += l;
+    buf += l;
+    len -= l;
+    
+    // read content len and ignore
+    l = ndn_block_get_var_number(buf, len, &num);
+    if (l < 0) return -1;
+    skip_len += l;
+    buf += l;
+    len -= l;
+    
+    // read round number in piggyback
+    l = ndn_block_get_var_number(buf, len, &(vn->rn));
+    if (l < 0) return -1;
+    skip_len += l;
+    buf += l;
+    len -= l;
+    
+    // read sequence number in piggyback
+    l = ndn_block_get_var_number(buf, len, &num);
     if (l < 0) return -1;
     if (num > 255) return -1;
     vn->sn = (uint8_t) num;
     
-    return pg_len + l;
+    return skip_len + l;
 }
 
 static int _get_node_index_by_pfx(ndn_sync_t* node, ndn_name_component_t* pfx)
