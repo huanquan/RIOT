@@ -73,10 +73,10 @@ static int _on_data(ndn_block_t* interest, ndn_block_t* data)
     if (retval == 0) {
         ndn_block_t dn;
         ndn_data_get_name(data, &dn);
-        printf("vsync (pid=%" PRIkernel_pid "): data received, name=",
+        printf("vsync (pid=%" PRIkernel_pid "): data received\n\t(",
                handle->id);
         ndn_name_print(&dn);
-        printf("\nContent: \"%.*s\"\n", (int) content.len, content.buf);
+        printf(") -> \"%.*s\"\n", (int) content.len, content.buf);
         return NDN_APP_CONTINUE;
     } else {
         printf("vsync (pid=%" PRIkernel_pid "): process_data returns %d\n",
@@ -297,7 +297,7 @@ int vsync(int argc, char **argv)
 
     const char* s = "Soldiers. Scientists. Adventurers. Oddities. In a time of "
                   "global crisis, an international task force of heroes banded "
-                  "together to restore peace to a war-torn world: OVERWATCH."
+                  "together to restore peace to a war-torn world: OVERWATCH. "
                   "Overwatch ended the crisis, and helped maintain peace in "
                   "the decades that followed, inspiring an era of exploration, "
                   "innovation, and discovery. But, after many years, Overwatch"
