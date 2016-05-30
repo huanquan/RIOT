@@ -250,11 +250,11 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
 /******************************************************************/
 
 
-static int _get_piggyback(ndn_block_t* content, vn_t* vn)
+static int _skip_type_len(ndn_block_t* block)
 {
     uint32_t num;
-    int l, skip_len = 0, len = content->len;
-    const uint8_t* buf = content->buf;
+    int l, len = block->len, skip_len = 0;
+    const uint8_t* buf = block->buf;
     
     // read content type and ignore
     l = ndn_block_get_var_number(buf, len, &num);
@@ -269,6 +269,16 @@ static int _get_piggyback(ndn_block_t* content, vn_t* vn)
     skip_len += l;
     buf += l;
     len -= l;
+    
+    return skip_len;
+}
+
+
+static int _get_piggyback(ndn_block_t* content, vn_t* vn)
+{
+    uint32_t num;
+    int l, skip_len = 0, len = content->len;
+    const uint8_t* buf = content->buf;
     
     // read round number in piggyback
     l = ndn_block_get_var_number(buf, len, &(vn->rn));
@@ -305,7 +315,7 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     uint8_t sn;
     uint32_t rn;
     vn_t pg_vn;
-    int i, l = 0;
+    int i, l;
     
     if (ndn_data_get_name(data, &d_name) < 0)
         return EXIT_BADFMT;
@@ -318,6 +328,11 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     
     if (ndn_data_get_content(data, &d_content) < 0) return EXIT_BADFMT;
     
+    l = _skip_type_len(&d_content);
+    if (l < 0) return EXIT_BADFMT;
+    d_content.buf += l;
+    d_content.len -= l;
+    
     if (sn == FIRST_SEQ_NUM) {
         if ((l = _get_piggyback(&d_content, &pg_vn)) < 0)
             return EXIT_BADFMT;
@@ -327,6 +342,9 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
             
         if (_check_missing_data(handler, &pfx, pg_vn.rn, node->ldi[i].sn, pg_vn.sn, NULL) != EXIT_SUCCESS)
             return EXIT_NOSPACE;
+            
+        d_content.buf += l;
+        d_content.len -= l;
     }
     
     if (node->ldi[i].rn < rn || (node->ldi[i].rn == rn && node->ldi[i].sn < sn)) {  // when updating states, ignore long delayed packets
@@ -334,8 +352,8 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
         node->ldi[i].sn = sn;
     }
     
-    content->buf = d_content.buf + l;
-    content->len = d_content.len - l;
+    content->buf = d_content.buf;
+    content->len = d_content.len;
     
     
     return EXIT_SUCCESS;
