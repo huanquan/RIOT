@@ -255,17 +255,14 @@ static void run_vsync(void* publish_context)
     sp = NULL;
 
     // 3. Schedule publication of data (only alice has this step)
-    if (node.idx == 0) {
-        if (ndn_app_schedule(handle, _publish_data, publish_context, 1000000) != 0) {
-            printf("vsync (pid=%" PRIkernel_pid "): cannot schedule first "
-                   "interest\n", handle->id);
-            ndn_app_destroy(handle);
-            return;
-        }
-        printf("vsync (pid=%" PRIkernel_pid "): schedule first interest in 1 sec\n",
-               handle->id);
+    if (ndn_app_schedule(handle, _publish_data, publish_context, 1000000) != 0) {
+        printf("vsync (pid=%" PRIkernel_pid "): cannot schedule first "
+               "interest\n", handle->id);
+        ndn_app_destroy(handle);
+        return;
     }
-
+    printf("vsync (pid=%" PRIkernel_pid "): schedule first interest in 1 sec\n",
+           handle->id);
     printf("vsync (pid=%" PRIkernel_pid "): enter app run loop\n",
            handle->id);
 
@@ -285,29 +282,41 @@ int vsync(int argc, char **argv)
         return 1;
     }
 
-    printf("Node idx=%d\n", sysconfig.id);
-    assert(sysconfig.id < 2);
+    uint32_t node_idx = (uint32_t) sysconfig.id;
+    printf("Node idx=%d\n", node_idx);
+    assert(node_idx < 2);
 
-    ndn_sync_init_state(&node, sysconfig.id, 2);
+    ndn_sync_init_state(&node, node_idx, 2);
     for (size_t i = 0; i < 2; i++) {
         node.pfx[i].buf = (uint8_t*) data_pfx[i];
         node.pfx[i].len = strlen(data_pfx[i]);
     }
     _publication_list_init();
 
-    const char* s = "Soldiers. Scientists. Adventurers. Oddities. In a time of "
-                  "global crisis, an international task force of heroes banded "
-                  "together to restore peace to a war-torn world: OVERWATCH. "
-                  "Overwatch ended the crisis, and helped maintain peace in "
-                  "the decades that followed, inspiring an era of exploration, "
-                  "innovation, and discovery. But, after many years, Overwatch"
-                  "'s influence waned, and it was eventually disbanded. Now, "
-                  "conflict is rising across the world again, and the call has "
-                  "gone out to heroes old and new. Are you with us?";
-    article.buf = (uint8_t*) s;
-    article.len = strlen(s);
+    const char* s[2] = {
+        "Soldiers. Scientists. Adventurers. Oddities. In a time of "
+        "global crisis, an international task force of heroes banded "
+        "together to restore peace to a war-torn world: OVERWATCH. "
+        "Overwatch ended the crisis, and helped maintain peace in "
+        "the decades that followed, inspiring an era of exploration, "
+        "innovation, and discovery. But, after many years, Overwatch"
+        "'s influence waned, and it was eventually disbanded. Now, "
+        "conflict is rising across the world again, and the call has "
+        "gone out to heroes old and new. Are you with us?",
+        "Overwatch is set in a futuristic Earth, sixty years into "
+        "the future. Thirty years ago, robots took over the world, "
+        "leading to the formation of an international taskforce "
+        "called Overwatch, which ended the war in mankind's favor. "
+        "Overwatch was disbanded thirty years after its formation, "
+        "and in the five years since, the world has become a darker "
+        "place. However, a new threat is looming, and heroes will "
+        "have to band together to defeat it. Multiple factions "
+        "exist in the world, operating in various shades of gray."
+    };
+    article.buf = (uint8_t*) s[node_idx];
+    article.len = strlen(s[node_idx]);
     article.current = 0;
-    article.per_pkt = 60;
+    article.per_pkt = 30;
 
     run_vsync((void*) &article);
 
