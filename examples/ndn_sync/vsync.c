@@ -1,8 +1,10 @@
 #include "config.h"
 #include "ndn_sync.h"
 
+
 #define MIN(a,b) ((a) < (b)? (a): (b))
 #define PUBLICATION_LIST_CAPACITY (20)
+
 
 /****** Storing vsync node state ******/ 
 static const char* data_pfx[2] = {"alice", "bob"};
@@ -21,12 +23,14 @@ static struct {
     ndn_shared_block_t* data;
 } publication_list[PUBLICATION_LIST_CAPACITY];
 
+
 static void _publication_list_init(void)
 {
     for (size_t i = 0; i < PUBLICATION_LIST_CAPACITY; i++) {
         publication_list[i].data = NULL;
     }
 }
+
 
 static size_t _publication_list_search(uint32_t rn, uint8_t sn)
 {
@@ -39,6 +43,7 @@ static size_t _publication_list_search(uint32_t rn, uint8_t sn)
     }
     return PUBLICATION_LIST_CAPACITY;   // failure
 }
+
 
 static size_t _publication_list_insert(uint32_t rn, uint8_t sn,
                                        ndn_shared_block_t* data)
@@ -59,6 +64,7 @@ static size_t _publication_list_insert(uint32_t rn, uint8_t sn,
     return PUBLICATION_LIST_CAPACITY;
 }
 
+
 static int _on_sync_interest(ndn_block_t* interest)
 {
     int retval = ndn_sync_process_sync_interest(handle, &node, interest, NULL);
@@ -76,6 +82,7 @@ static int _on_sync_interest(ndn_block_t* interest)
         return NDN_APP_ERROR;
     }
 }
+
 
 static int _parse_wtf_interest(ndn_block_t* interest, ndn_block_t* name,
                                uint32_t* rn, uint8_t* sn)
@@ -108,6 +115,7 @@ static int _parse_wtf_interest(ndn_block_t* interest, ndn_block_t* name,
 
     return 0;
 }
+
 
 static int _on_wtf_interest(ndn_block_t* interest)
 {
@@ -144,6 +152,7 @@ static int _on_wtf_interest(ndn_block_t* interest)
     return NDN_APP_CONTINUE;
 }
 
+
 static int _publish_data(void* context)
 {
     publish_context_t* pcontext = (publish_context_t*) context;
@@ -177,6 +186,7 @@ static int _publish_data(void* context)
     return NDN_APP_CONTINUE;
 }
 
+
 static void run_vsync(void* publish_context)
 {
     printf("vsync (pid=%" PRIkernel_pid "): start\n", thread_getpid());
@@ -195,7 +205,7 @@ static void run_vsync(void* publish_context)
     ndn_name_print(&(dp->block));
     printf("\"\n");
     // pass ownership of "dp" to the API
-    if (ndn_app_register_prefix(handle, dp, _on_sync_interest) != 0) {
+    if (ndn_app_register_prefix(handle, dp, _on_wtf_interest) != 0) {
         printf("vsync (pid=%" PRIkernel_pid "): failed to register prefix\n",
                handle->id);
         ndn_app_destroy(handle);
@@ -215,7 +225,7 @@ static void run_vsync(void* publish_context)
     ndn_name_print(&(sp->block));
     printf("\"\n");
     // pass ownership of "sp" to the API
-    if (ndn_app_register_prefix(handle, sp, _on_wtf_interest) != 0) {
+    if (ndn_app_register_prefix(handle, sp, _on_sync_interest) != 0) {
         printf("vsync (pid=%" PRIkernel_pid "): failed to register prefix\n",
                handle->id);
         ndn_app_destroy(handle);
@@ -245,6 +255,7 @@ static void run_vsync(void* publish_context)
 
     ndn_app_destroy(handle);
 }
+
 
 int vsync(int argc, char **argv)
 {

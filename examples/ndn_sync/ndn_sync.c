@@ -144,7 +144,8 @@ ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
     node->ldi[node->idx].sn = node->vv[node->idx];
     
     ndn_shared_block_t* d = ndn_data_create(&(name->block), metainfo, &copy_content,
-                                            NDN_SIG_TYPE_DIGEST_SHA256,NULL,0);
+                                            NDN_SIG_TYPE_DIGEST_SHA256, NULL,
+                                            NULL, 0);
     ndn_shared_block_release(name);
     
     return d;
