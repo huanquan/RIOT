@@ -4,11 +4,11 @@
 #include "byteorder.h"
 
 #define MIN(a,b) ((a) < (b)? (a): (b))
-#define PUBLICATION_LIST_CAPACITY (20)
+#define PUBLICATION_LIST_CAPACITY (100)
+#define NUM_NODES (3)
 
 
 /****** Storing vsync node state ******/ 
-static const char* data_pfx[2] = {"alice", "bob"};
 static ndn_app_t* handle = NULL;
 static ndn_sync_t node;
 typedef struct {
@@ -196,7 +196,12 @@ static int _publish_data(void* context)
                handle->id);
         return NDN_APP_ERROR;
     }
-    _publication_list_insert(node.rn, node.vv[node.idx], d);
+    size_t retval = _publication_list_insert(node.rn, node.vv[node.idx], d);
+    if (retval == PUBLICATION_LIST_CAPACITY) {
+        printf("vsync (pid=%" PRIkernel_pid "): local buffer overflows. "
+               "INCREASE IT NOW!!!\n", handle->id);
+        return NDN_APP_ERROR;
+    }
     pcontext->current += data_size;
 
     printf("vsync (pid=%" PRIkernel_pid "): publish data (%u, %u)\n",
@@ -283,23 +288,8 @@ static void run_vsync(void* publish_context)
 
 int vsync(int argc, char **argv)
 {
-    if (argc >= 2) {
-        printf("usage: %s\n", argv[0]);
-        return 1;
-    }
-
-    uint32_t node_idx = (uint32_t) sysconfig.id;
-    printf("Node idx=%d\n", node_idx);
-    assert(node_idx < 2);
-
-    ndn_sync_init_state(&node, node_idx, 2);
-    for (size_t i = 0; i < 2; i++) {
-        node.pfx[i].buf = (uint8_t*) data_pfx[i];
-        node.pfx[i].len = strlen(data_pfx[i]);
-    }
-    _publication_list_init();
-
-    const char* s[2] = {
+    static const char* data_pfx[NUM_NODES] = {"alice", "bob", "chen"};
+    static const char* s[NUM_NODES] = {
         "Soldiers. Scientists. Adventurers. Oddities. In a time of "
         "global crisis, an international task force of heroes banded "
         "together to restore peace to a war-torn world: OVERWATCH. "
@@ -317,12 +307,57 @@ int vsync(int argc, char **argv)
         "and in the five years since, the world has become a darker "
         "place. However, a new threat is looming, and heroes will "
         "have to band together to defeat it. Multiple factions "
-        "exist in the world, operating in various shades of gray."
+        "exist in the world, operating in various shades of gray.",
+        "Once a frontline combatant in the devastating Omnic Crisis, "
+        "this curious Bastion unit now explores the world, fascinated "
+        "by nature but wary of a fearful humanity. Originally created "
+        "for peacekeeping purposes, Bastion robot units possessed the "
+        "unique ability to rapidly reconfigure themselves into an "
+        "assault-cannon mode. But during the Omnic Crisis, they were "
+        "turned against their human makers, forming the bulk of the "
+        "omnics' rebel army. Following the resolution of the crisis, "
+        "nearly all of them were destroyed or disassembled. To this "
+        "day, Bastion units still symbolize the horrors of the "
+        "conflict. One unique Bastion unit, severely damaged in the "
+        "final battles of the war, was left forgotten for over a "
+        "decade. It lay dormant, exposed to the elements and rusting "
+        "while nature slowly reclaimed it. Overgrown with vines and "
+        "roots and nested upon by small animals, the robot sat inert, "
+        "seemingly unaware of the passing of time. That was until one "
+        "fateful day, when it unexpectedly reactivated. With its "
+        "combat programming all but lost, it instead displayed an "
+        "intense curiosity about the natural world and its "
+        "inhabitants. This inquisitive Bastion unit set out to explore "
+        "its surroundings and discover its purpose on a war-ravaged "
+        "planet. Though \"Bastion\" appears to be gentle -- even "
+        "harmless, at times -- its core combat programming takes over "
+        "when the unit senses danger, utilizing its entire arsenal to "
+        "eliminate anything it perceives as a threat. This has led to "
+        "instances of conflict with the few humans it has encountered, "
+        "and has driven it to avoid populated areas in favor of the "
+        "wild, uncharted regions of the world."
     };
+
+    if (argc >= 2) {
+        printf("usage: %s\n", argv[0]);
+        return 1;
+    }
+
+    uint32_t node_idx = (uint32_t) sysconfig.id;
+    printf("Node idx=%d\n", node_idx);
+    assert(node_idx < NUM_NODES);
+
+    ndn_sync_init_state(&node, node_idx, NUM_NODES);
+    for (size_t i = 0; i < NUM_NODES; i++) {
+        node.pfx[i].buf = (uint8_t*) data_pfx[i];
+        node.pfx[i].len = strlen(data_pfx[i]);
+    }
+    _publication_list_init();
+
     article.buf = (uint8_t*) s[node_idx];
     article.len = strlen(s[node_idx]);
     article.current = 0;
-    article.per_pkt = 30;
+    article.per_pkt = 10;
 
     run_vsync((void*) &article);
 

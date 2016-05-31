@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<topology version="1">
+    <net description="3 nodes in a regular  line" name="line3">
+        <nodeTypes>
+            <nodeType name="riot_native">
+                <interfaces>
+                    <interface name="cc2420" type="802.15.4"/>
+                </interfaces>
+            </nodeType>
+        </nodeTypes>
+        <nodes>
+            <node binary="/home/likayo/Code/RIOT-NDN/examples/ndn_sync/run_elf.sh 0" name="0" type="riot_native"/>
+            <node binary="/home/likayo/Code/RIOT-NDN/examples/ndn_sync/run_elf.sh 1" name="1" type="riot_native"/>
+            <node binary="/home/likayo/Code/RIOT-NDN/examples/ndn_sync/run_elf.sh 2" name="2" type="riot_native"/>
+        </nodes>
+        <links>
+            <link broadcast_loss="0.0" from_if="cc2420" from_node="0" loss="0.0" to_if="cc2420" to_node="1" uni="false"/>
+            <link broadcast_loss="0.0" from_if="cc2420" from_node="1" loss="0.0" to_if="cc2420" to_node="2" uni="false"/>
+        </links>
+    </net>
+</topology>

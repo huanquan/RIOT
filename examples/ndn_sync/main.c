@@ -27,20 +27,22 @@
 
 extern int vsync(int argc, char **argv);
 
-static const shell_command_t shell_commands[] = {
-    { "vsync", "VectorSync", vsync },
-    { NULL, NULL, NULL }
-};
+// static const shell_command_t shell_commands[] = {
+//     { "vsync", "VectorSync", vsync },
+//     { NULL, NULL, NULL }
+// };
 
 int main(void)
 {
     config_load();
     printf("Node id=%d\n", sysconfig.id);
 
-    /* start shell */
-    puts("All up, running the shell now");
-    char line_buf[SHELL_DEFAULT_BUFSIZE];
-    shell_run(shell_commands, line_buf, SHELL_DEFAULT_BUFSIZE);
+    // /* start shell */
+    // puts("All up, running the shell now");
+    // char line_buf[SHELL_DEFAULT_BUFSIZE];
+    // shell_run(shell_commands, line_buf, SHELL_DEFAULT_BUFSIZE);
+    char* argv[1] = { "vsync" };
+    vsync(1, argv);
 
     /* should be never reached */
     return 0;
