@@ -17,6 +17,7 @@ extern "C" {
 #define MAX_SEQ_NUM 15
 #define MAX_NAME_LEN 255
 #define TIME_SEC 1000
+#define MAX_ROUND_GAP 50
 
 #define EXIT_SUCCESS 0
 #define EXIT_BADFMT 1
@@ -27,6 +28,12 @@ typedef struct {
     uint8_t sn;    // version number
 } vn_t;
 
+
+typedef struct {
+    uint8_t rec_vvs[MAX_ROUND_GAP][MAX_NODE_NUM];   // maintain the latest version vector for each previous round 
+} ndn_sync_log_t;
+
+
 typedef struct {
     ndn_shared_block_t* sync_pfx;
     uint8_t idx;    // index of the node
@@ -35,6 +42,8 @@ typedef struct {
     uint8_t vv[MAX_NODE_NUM];    // version vector
     ndn_name_component_t pfx[MAX_NODE_NUM]; // list of data prefixes
     vn_t ldi[MAX_NODE_NUM]; // last received data
+    
+    ndn_sync_log_t* log;    // local log of received data, used for recovery
 } ndn_sync_t;
 
 

@@ -15,6 +15,7 @@ int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node)
     node->rn = 0;
     memset(node->vv, 0, num_node);
     memset(node->ldi, 0, num_node * sizeof(vn_t));
+    node->log = NULL;
     return EXIT_SUCCESS;
 }
 
@@ -218,11 +219,23 @@ static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
 }
 
 
+static int _recover_round(ndn_app_t* handler, ndn_sync_t* node, uint32_t rn, ndn_app_data_cb_t on_data)
+{
+    size_t i;
+    uint8_t sn = FIRST_SEQ_NUM;
+    for (i = 0; i < node->num_node; i++) {
+        if (_send_interest(handler, &(node->pfx[i]), rn + 1, &sn, 1, on_data) != EXIT_SUCCESS)
+            return EXIT_NOSPACE;
+    }
+    return EXIT_SUCCESS;
+}
+
+
 int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* interest, ndn_app_data_cb_t on_data)
 {
     if (handler == NULL || node == NULL || interest == NULL) return EXIT_BADFMT;
     
-    uint32_t rn;
+    uint32_t rn, rn_i;
     uint8_t vv[MAX_NODE_NUM], old_vv[MAX_NODE_NUM];
     ndn_block_t i_name;
     
@@ -235,6 +248,13 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
         return EXIT_BADFMT;
     
     if (rn > node->rn) {
+        if (rn > node->rn + 1) {    // if the round gap is more than 1
+            for (rn_i = node->rn; rn_i < rn - 1; rn_i++) {
+                if (_recover_round(handler, node, rn_i, on_data) != EXIT_SUCCESS)
+                    return EXIT_NOSPACE;
+            }
+        }
+        
         node->rn = rn;
         memset(node->vv, 0, node->num_node);
     }
@@ -342,12 +362,12 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
     if (sn == FIRST_SEQ_NUM) {
         if ((l = _get_piggyback(&d_content, &pg_vn)) < 0)
             return EXIT_BADFMT;
-            
-        if (node->ldi[i].rn != pg_vn.rn)    // either out-of-date data (>) or missing too much data (<)
-            return EXIT_NOSPACE;
-            
-        if (_check_missing_data(handler, &pfx, pg_vn.rn, node->ldi[i].sn, pg_vn.sn, NULL) != EXIT_SUCCESS)
-            return EXIT_NOSPACE;
+        
+        // check whether there is missing data need fetching    
+        if (node->log != NULL && pg_vn.rn <= node->ldi[i].rn) {
+            if (_check_missing_data(handler, &pfx, pg_vn.rn, node->log->rec_vvs[pg_vn.rn % MAX_ROUND_GAP][i], pg_vn.sn, NULL) != EXIT_SUCCESS)
+                return EXIT_NOSPACE;
+        }
             
         d_content.buf += l;
         d_content.len -= l;
@@ -358,9 +378,14 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
         node->ldi[i].sn = sn;
     }
     
+    if (node->log != NULL && node->log->rec_vvs[rn % MAX_ROUND_GAP][i] < sn) {   // update local log
+        node->log->rec_vvs[rn % MAX_ROUND_GAP][i] = sn;
+    }
+    
     content->buf = d_content.buf;
     content->len = d_content.len;
     
-    
     return EXIT_SUCCESS;
 }
+
+/**************************************************************************/
