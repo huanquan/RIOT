@@ -61,6 +61,20 @@ typedef struct {
 int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node);
 
 
+/**
+ * @brief   Initiate local log and attach it to sync protocol
+ *
+ * @details This function is reentrant and can be called from multiple threads.
+ *
+ * @param[in]  node       State machine of sync protocol.
+ * @param[in]  log        Local log.
+ *
+ * @return  0, if succeed.
+ * @return  1, if @p node or @p log is NULL.
+ */
+int ndn_sync_set_init_log(ndn_sync_t* node, ndn_sync_log_t* log);
+
+
 ndn_shared_block_t* ndn_sync_get_sync_prefix(void);
 
 

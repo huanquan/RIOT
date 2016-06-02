@@ -19,6 +19,14 @@ int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node)
     return EXIT_SUCCESS;
 }
 
+int ndn_sync_set_init_log(ndn_sync_t* node, ndn_sync_log_t* log)
+{
+    if (node == NULL || log == NULL) return EXIT_BADFMT;
+    memset(log, 0, MAX_NODE_NUM * MAX_ROUND_GAP);
+    node->log = log;
+    return EXIT_SUCCESS;
+}
+
 
 /***********************************************************************************/
 
