@@ -12,7 +12,7 @@ int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node)
     node->sync_pfx = ndn_sync_get_sync_prefix();
     node->idx = idx;
     node->num_node = num_node;
-    node->rn = 0;
+    node->rn = 1;
     memset(node->vv, 0, num_node);
     memset(node->ldi, 0, num_node * sizeof(vn_t));
     node->log = NULL;
@@ -32,7 +32,8 @@ int ndn_sync_set_init_log(ndn_sync_t* node, ndn_sync_log_t* log)
 
 static int _send_interest(ndn_app_t* handler, ndn_block_t* pfx,
                           uint32_t rn, uint8_t* vv, size_t num_node,
-                          ndn_app_data_cb_t on_data)
+                          ndn_app_data_cb_t on_data,
+                          ndn_app_timeout_cb_t on_timeout)
 {
     ndn_shared_block_t* pfx_rn = ndn_name_append_uint32(pfx, rn);
     if (pfx_rn == NULL) return EXIT_BADFMT;
@@ -40,9 +41,8 @@ static int _send_interest(ndn_app_t* handler, ndn_block_t* pfx,
     ndn_shared_block_release(pfx_rn);
     if (name == NULL) return EXIT_BADFMT;
     
-    // Ack is ignored
-    // Timeout is ignored
-    if (ndn_app_express_interest(handler, &(name->block), NULL, TIME_SEC, on_data, NULL) < 0) {
+    assert((int) on_timeout != 0x12345678);  // to make compiler happy
+    if (ndn_app_express_interest(handler, &(name->block), NULL, 20 * TIME_SEC, on_data, NULL) < 0) {
         ndn_shared_block_release(name);
         return EXIT_NOSPACE;
     }
@@ -146,7 +146,8 @@ ndn_shared_block_t* ndn_sync_publish_data (ndn_app_t* handler, ndn_sync_t* node,
         }
     }
     
-    _send_interest(handler, &(node->sync_pfx->block), node->rn, node->vv, node->num_node, NULL);
+    // Ack and timeout are ignored
+    _send_interest(handler, &(node->sync_pfx->block), node->rn, node->vv, node->num_node, NULL, NULL);
     
     // update last packet
     node->ldi[node->idx].rn = node->rn;
@@ -206,7 +207,8 @@ static int _extract_fields(ndn_block_t* name, ndn_name_component_t* pfx,
 
 static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
                                uint32_t rn, uint8_t old_sn, uint8_t sn,
-                               ndn_app_data_cb_t on_data)
+                               ndn_app_data_cb_t on_data,
+                               ndn_app_timeout_cb_t on_timeout)
 {
     // encode data prefix
     ndn_shared_block_t* dp = _name_from_component(pfx);
@@ -214,9 +216,11 @@ static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
     assert(dp != NULL);
 
     if (old_sn == MAX_SEQ_NUM) return EXIT_SUCCESS; // avoid math overflow
+    printf("old_sn: %u, sn: %u\n", old_sn, sn);
     // retrieve data in (old_sn, sn]
     for (old_sn++; old_sn <= sn; old_sn++) {
-        if (_send_interest(handler, &(dp->block), rn, &old_sn, 1, on_data) != EXIT_SUCCESS) {
+        printf("Try retrieve (%u, %u)\n", rn, old_sn);
+        if (_send_interest(handler, &(dp->block), rn, &old_sn, 1, on_data, on_timeout) != EXIT_SUCCESS) {
             ndn_shared_block_release(dp);
             return EXIT_NOSPACE;
         }
@@ -227,19 +231,30 @@ static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
 }
 
 
-static int _recover_round(ndn_app_t* handler, ndn_sync_t* node, uint32_t rn, ndn_app_data_cb_t on_data)
+static int _recover_round(ndn_app_t* handler, ndn_sync_t* node, uint32_t rn,
+                          ndn_app_data_cb_t on_data,
+                          ndn_app_timeout_cb_t on_timeout)
 {
     size_t i;
     uint8_t sn = FIRST_SEQ_NUM;
     for (i = 0; i < node->num_node; i++) {
-        if (_send_interest(handler, &(node->pfx[i]), rn + 1, &sn, 1, on_data) != EXIT_SUCCESS)
+        ndn_shared_block_t* pfx = _name_from_component(&(node->pfx[i]));
+        if (pfx == NULL) return EXIT_NOSPACE;
+        printf("Try retrieve (%u, %u) from node %d\n", rn + 1, sn, i);
+        if (_send_interest(handler, &(pfx->block), rn + 1, &sn, 1, on_data, on_timeout) != EXIT_SUCCESS) {
+            ndn_shared_block_release(pfx);
             return EXIT_NOSPACE;
+        }
+        ndn_shared_block_release(pfx);
     }
     return EXIT_SUCCESS;
 }
 
 
-int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* interest, ndn_app_data_cb_t on_data)
+int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, 
+                                   ndn_block_t* interest,
+                                   ndn_app_data_cb_t on_data,
+                                   ndn_app_timeout_cb_t on_timeout)
 {
     if (handler == NULL || node == NULL || interest == NULL) return EXIT_BADFMT;
     
@@ -256,11 +271,9 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
         return EXIT_BADFMT;
     
     if (rn > node->rn) {
-        if (rn > node->rn + 1) {    // if the round gap is more than 1
-            for (rn_i = node->rn; rn_i < rn - 1; rn_i++) {
-                if (_recover_round(handler, node, rn_i, on_data) != EXIT_SUCCESS)
-                    return EXIT_NOSPACE;
-            }
+        for (rn_i = node->rn; rn_i < rn; rn_i++) {
+            if (_recover_round(handler, node, rn_i, on_data, on_timeout) != EXIT_SUCCESS)
+                return EXIT_NOSPACE;
         }
         
         node->rn = rn;
@@ -271,8 +284,9 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, ndn_blo
     _merge(node->vv, vv, node->vv, node->num_node);
     
     for (i = 0; i < node->num_node; i++) {
-        if(_check_missing_data(handler, &(node->pfx[i]), rn, old_vv[i], vv[i], on_data) != EXIT_SUCCESS)
+        if(_check_missing_data(handler, &(node->pfx[i]), rn, old_vv[i], vv[i], on_data, on_timeout) != EXIT_SUCCESS) {
             return EXIT_NOSPACE;
+        }
     }
     
     return EXIT_SUCCESS;
@@ -340,7 +354,9 @@ static int _get_node_index_by_pfx(ndn_sync_t* node, ndn_name_component_t* pfx)
 }
 
 
-int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* data, ndn_block_t* content)
+int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node,
+                          ndn_block_t* data, ndn_block_t* content,
+                          ndn_app_data_cb_t on_data)
 {
     if (handler == NULL || node == NULL || data == NULL || data->buf == NULL) return EXIT_BADFMT;
     
@@ -373,7 +389,7 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node, ndn_block_t* dat
         
         // check whether there is missing data need fetching    
         if (node->log != NULL && pg_vn.rn <= node->ldi[i].rn) {
-            if (_check_missing_data(handler, &pfx, pg_vn.rn, node->log->rec_vvs[pg_vn.rn % MAX_ROUND_GAP][i], pg_vn.sn, NULL) != EXIT_SUCCESS)
+            if (_check_missing_data(handler, &pfx, pg_vn.rn, node->log->rec_vvs[pg_vn.rn % MAX_ROUND_GAP][i], pg_vn.sn, on_data, NULL) != EXIT_SUCCESS)
                 return EXIT_NOSPACE;
         }
             

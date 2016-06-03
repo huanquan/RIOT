@@ -107,13 +107,16 @@ ndn_shared_block_t* ndn_sync_publish_data(ndn_app_t* handler, ndn_sync_t* node,
  * @param[in]  node       State machine of sync protocol.
  * @param[in]  interest   Received interest.
  * @oaram[in]  on_data    Callback executed when data of missing data's interests are received. Can be NULL.
+ * @oaram[in]  on_timeout Callback executed when data of missing data's interests timeout. Can be NULL.
  *
  * @return  0, if success.
  * @return  1, if the interest is in a bad format.
  * @return  2, if fail to fetch missing data.
  */
 int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node,
-                                   ndn_block_t* interest, ndn_app_data_cb_t on_data);
+                                   ndn_block_t* interest,
+                                   ndn_app_data_cb_t on_data,
+                                   ndn_app_timeout_cb_t on_timeout);
 
 /**
  * @brief   process received data, update states and fetch missing data storing
@@ -125,13 +128,15 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node,
  * @param[in]  node       State machine of sync protocol.
  * @param[in]  data       Received data.
  * @param[out] content    Content of received data. Does not copy data.
+ * @oaram[in]  on_data    Callback executed when data of missing data's interests are received. Can be NULL.
  *
  * @return  0, if success.
  * @return  1, if the data is in a bad format.
  * @return  2, if fail to fetch missing data.
  */
 int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node,
-                          ndn_block_t* data, ndn_block_t* content);
+                          ndn_block_t* data, ndn_block_t* content,
+                          ndn_app_data_cb_t on_data);
 
 #ifdef __cplusplus
 }

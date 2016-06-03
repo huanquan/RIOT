@@ -1,16 +1,18 @@
 #include "config.h"
 #include "ndn_sync.h"
 
-#include "byteorder.h"
+#include <byteorder.h>
+#include <unistd.h>
 
 #define MIN(a,b) ((a) < (b)? (a): (b))
-#define PUBLICATION_LIST_CAPACITY (100)
+#define PUBLICATION_LIST_CAPACITY (200)
 #define NUM_NODES (3)
 
 
 /****** Storing vsync node state ******/ 
 static ndn_app_t* handle = NULL;
 static ndn_sync_t node;
+static ndn_sync_log_t node_sync_log;
 typedef struct {
     const uint8_t* buf;
     size_t len;
@@ -70,7 +72,7 @@ static int _on_data(ndn_block_t* interest, ndn_block_t* data)
 {
     assert(interest != NULL);   // just to make compiler happy
     ndn_block_t content;
-    int retval = ndn_sync_process_data(handle, &node, data, &content);
+    int retval = ndn_sync_process_data(handle, &node, data, &content, _on_data);
     if (retval == 0) {
         ndn_block_t dn;
         ndn_data_get_name(data, &dn);
@@ -87,9 +89,30 @@ static int _on_data(ndn_block_t* interest, ndn_block_t* data)
 }
 
 
+static int _on_data_interest_timeout(ndn_block_t* interest)
+{
+    ndn_block_t name;
+    int r = ndn_interest_get_name(interest, &name);
+    assert(r == 0);
+
+    printf("vsync (pid=%" PRIkernel_pid "): interest timeout, name=",
+           handle->id);
+    ndn_name_print(&name);
+    printf(", resending...\n");
+
+    if (ndn_app_express_interest(handle, &name, NULL, 20 * TIME_SEC, _on_data, _on_data_interest_timeout) < 0) {
+        printf("vsync (pid=%" PRIkernel_pid "): cannot resend.\n",
+               handle->id);
+        return NDN_APP_ERROR;
+    }
+
+    return NDN_APP_CONTINUE;
+}
+
+
 static int _on_sync_interest(ndn_block_t* interest)
 {
-    int retval = ndn_sync_process_sync_interest(handle, &node, interest, _on_data);
+    int retval = ndn_sync_process_sync_interest(handle, &node, interest, _on_data, _on_data_interest_timeout);
     if (retval == 0) {
         ndn_block_t in;
         ndn_interest_get_name(interest, &in);
@@ -162,7 +185,7 @@ static int _on_wtf_interest(ndn_block_t* interest)
     if (k == PUBLICATION_LIST_CAPACITY) {
         printf("vsync (pid=%" PRIkernel_pid "): corresponding data pkt not found\n",
                handle->id);
-        return NDN_APP_ERROR;
+        return NDN_APP_CONTINUE;
     }
 
     ndn_shared_block_t* d = ndn_shared_block_copy(publication_list[k].data);
@@ -208,12 +231,12 @@ static int _publish_data(void* context)
            handle->id, node.rn, (uint32_t) node.vv[node.idx]);
 
     // Schedule next publishing
-    if (ndn_app_schedule(handle, _publish_data, context, 2000000) != 0) {
+    if (ndn_app_schedule(handle, _publish_data, context, 500000) != 0) {
         printf("vsync (pid=%" PRIkernel_pid "): cannot schedule next publishing\n",
                handle->id);
         return NDN_APP_ERROR;
     }
-    printf("vsync (pid=%" PRIkernel_pid "): schedule next publishing in 2 sec\n",
+    printf("vsync (pid=%" PRIkernel_pid "): schedule next publishing in 0.5 sec\n",
            handle->id);
     return NDN_APP_CONTINUE;
 }
@@ -348,6 +371,7 @@ int vsync(int argc, char **argv)
     assert(node_idx < NUM_NODES);
 
     ndn_sync_init_state(&node, node_idx, NUM_NODES);
+    ndn_sync_set_init_log(&node, &node_sync_log);
     for (size_t i = 0; i < NUM_NODES; i++) {
         node.pfx[i].buf = (uint8_t*) data_pfx[i];
         node.pfx[i].len = strlen(data_pfx[i]);
@@ -358,6 +382,10 @@ int vsync(int argc, char **argv)
     article.len = strlen(s[node_idx]);
     article.current = 0;
     article.per_pkt = 10;
+
+    if (node_idx == 2) {
+        sleep(20);
+    }
 
     run_vsync((void*) &article);
 
