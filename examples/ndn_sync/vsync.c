@@ -68,11 +68,13 @@ static size_t _publication_list_insert(uint32_t rn, uint8_t sn,
 }
 
 
+static int _on_data_interest_timeout(ndn_block_t* interest);
+
 static int _on_data(ndn_block_t* interest, ndn_block_t* data)
 {
     assert(interest != NULL);   // just to make compiler happy
     ndn_block_t content;
-    int retval = ndn_sync_process_data(handle, &node, data, &content, _on_data);
+    int retval = ndn_sync_process_data(handle, &node, data, &content, _on_data, _on_data_interest_timeout);
     if (retval == 0) {
         ndn_block_t dn;
         ndn_data_get_name(data, &dn);

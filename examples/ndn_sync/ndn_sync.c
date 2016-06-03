@@ -41,8 +41,7 @@ static int _send_interest(ndn_app_t* handler, ndn_block_t* pfx,
     ndn_shared_block_release(pfx_rn);
     if (name == NULL) return EXIT_BADFMT;
     
-    assert((int) on_timeout != 0x12345678);  // to make compiler happy
-    if (ndn_app_express_interest(handler, &(name->block), NULL, 20 * TIME_SEC, on_data, NULL) < 0) {
+    if (ndn_app_express_interest(handler, &(name->block), NULL, 20 * TIME_SEC, on_data, on_timeout) < 0) {
         ndn_shared_block_release(name);
         return EXIT_NOSPACE;
     }
@@ -240,6 +239,8 @@ static int _recover_round(ndn_app_t* handler, ndn_sync_t* node, uint32_t rn,
     size_t i;
     uint8_t sn = FIRST_SEQ_NUM;
     for (i = 0; i < node->num_node; i++) {
+        if (i == node->idx)
+            continue;
         ndn_shared_block_t* pfx = _name_from_component(&(node->pfx[i]));
         if (pfx == NULL) return EXIT_NOSPACE;
         printf("Try retrieve (%u, %u) from node %d\n", rn + 1, sn, i);
@@ -358,7 +359,8 @@ static int _get_node_index_by_pfx(ndn_sync_t* node, ndn_name_component_t* pfx)
 
 int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node,
                           ndn_block_t* data, ndn_block_t* content,
-                          ndn_app_data_cb_t on_data)
+                          ndn_app_data_cb_t on_data,
+                          ndn_app_timeout_cb_t on_timeout)
 {
     if (handler == NULL || node == NULL || data == NULL || data->buf == NULL) return EXIT_BADFMT;
     
@@ -391,7 +393,7 @@ int ndn_sync_process_data(ndn_app_t* handler, ndn_sync_t* node,
         
         // check whether there is missing data need fetching    
         if (node->log != NULL && pg_vn.rn <= node->ldi[i].rn) {
-            if (_check_missing_data(handler, &pfx, pg_vn.rn, node->log->rec_vvs[pg_vn.rn % MAX_ROUND_GAP][i], pg_vn.sn, on_data, NULL) != EXIT_SUCCESS)
+            if (_check_missing_data(handler, &pfx, pg_vn.rn, node->log->rec_vvs[pg_vn.rn % MAX_ROUND_GAP][i], pg_vn.sn, on_data, on_timeout) != EXIT_SUCCESS)
                 return EXIT_NOSPACE;
         }
             
