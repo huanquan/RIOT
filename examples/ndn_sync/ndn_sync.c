@@ -12,7 +12,7 @@ int ndn_sync_init_state(ndn_sync_t* node, uint8_t idx, size_t num_node)
     node->sync_pfx = ndn_sync_get_sync_prefix();
     node->idx = idx;
     node->num_node = num_node;
-    node->rn = 1;
+    node->rn = 0;
     memset(node->vv, 0, num_node);
     memset(node->ldi, 0, num_node * sizeof(vn_t));
     node->log = NULL;
@@ -219,7 +219,9 @@ static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
     printf("old_sn: %u, sn: %u\n", old_sn, sn);
     // retrieve data in (old_sn, sn]
     for (old_sn++; old_sn <= sn; old_sn++) {
-        printf("Try retrieve (%u, %u)\n", rn, old_sn);
+        printf("Try retrieve (%u, %u) from prefix ", rn, old_sn);
+        ndn_name_print(&dp->block);
+        printf("\n");
         if (_send_interest(handler, &(dp->block), rn, &old_sn, 1, on_data, on_timeout) != EXIT_SUCCESS) {
             ndn_shared_block_release(dp);
             return EXIT_NOSPACE;
