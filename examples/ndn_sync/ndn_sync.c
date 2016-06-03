@@ -232,28 +232,6 @@ static int _check_missing_data(ndn_app_t* handler, ndn_name_component_t* pfx,
 }
 
 
-static int _recover_round(ndn_app_t* handler, ndn_sync_t* node, uint32_t rn,
-                          ndn_app_data_cb_t on_data,
-                          ndn_app_timeout_cb_t on_timeout)
-{
-    size_t i;
-    uint8_t sn = FIRST_SEQ_NUM;
-    for (i = 0; i < node->num_node; i++) {
-        if (i == node->idx)
-            continue;
-        ndn_shared_block_t* pfx = _name_from_component(&(node->pfx[i]));
-        if (pfx == NULL) return EXIT_NOSPACE;
-        printf("Try retrieve (%u, %u) from node %d\n", rn + 1, sn, i);
-        if (_send_interest(handler, &(pfx->block), rn + 1, &sn, 1, on_data, on_timeout) != EXIT_SUCCESS) {
-            ndn_shared_block_release(pfx);
-            return EXIT_NOSPACE;
-        }
-        ndn_shared_block_release(pfx);
-    }
-    return EXIT_SUCCESS;
-}
-
-
 int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node, 
                                    ndn_block_t* interest,
                                    ndn_app_data_cb_t on_data,
@@ -261,7 +239,7 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node,
 {
     if (handler == NULL || node == NULL || interest == NULL) return EXIT_BADFMT;
     
-    uint32_t rn, rn_i;
+    uint32_t rn;
     uint8_t vv[MAX_NODE_NUM], old_vv[MAX_NODE_NUM];
     ndn_block_t i_name;
     
@@ -274,11 +252,6 @@ int ndn_sync_process_sync_interest(ndn_app_t* handler, ndn_sync_t* node,
         return EXIT_BADFMT;
     
     if (rn > node->rn) {
-        for (rn_i = node->rn; rn_i < rn; rn_i++) {
-            if (_recover_round(handler, node, rn_i, on_data, on_timeout) != EXIT_SUCCESS)
-                return EXIT_NOSPACE;
-        }
-        
         node->rn = rn;
         memset(node->vv, 0, node->num_node);
     }
